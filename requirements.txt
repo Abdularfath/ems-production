@@ -5,7 +5,7 @@ Flask==3.0.3
 firebase-admin==6.5.0
  
 # Open requirements.txt and add this line
-razorpay==1.4.1
+razorpay==1.4.2
  
 # SendGrid — sending confirmation emails
 sendgrid==6.11.0
