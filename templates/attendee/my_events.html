@@ -2,86 +2,147 @@
 {% block title %}My Tickets{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row mb-4">
-        <div class="col">
-            <h2 class="fw-bold"><i class="bi bi-ticket-perforated-fill text-primary me-2"></i>My Tickets</h2>
-            <p class="text-muted">View your purchased tickets and QR codes for check-in.</p>
-        </div>
-        <div class="col-auto">
-            <a href="{{ url_for('public.index') }}" class="btn btn-outline-primary">Browse More Events</a>
-        </div>
-    </div>
+<div class="container py-4">
 
-    <div class="row g-4">
-        {% if registrations %}
-            {% for reg in registrations %}
-            <div class="col-md-6 col-lg-4">
-                <div class="card shadow-sm border-0 h-100 position-relative">
-                    
-                    <!-- Status Badge -->
-                    <div class="position-absolute top-0 end-0 p-3">
-                        {% if reg.status == 'checked_in' %}
-                            <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm"><i class="bi bi-check-circle-fill me-1"></i>Checked In</span>
-                        {% elif reg.status == 'confirmed' %}
-                            <span class="badge bg-primary rounded-pill px-3 py-2 shadow-sm">Confirmed</span>
-                        {% else %}
-                            <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm">{{ reg.status | capitalize }}</span>
-                        {% endif %}
+    <h3 class="fw-bold mb-4">
+        <i class="bi bi-ticket-perforated me-2 text-primary"></i>My Tickets
+    </h3>
+
+    <!-- Bootstrap Tabs -->
+    <ul class="nav nav-tabs mb-4" id="ticketTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="upcoming-tab" data-bs-toggle="tab"
+                    data-bs-target="#upcoming" type="button" role="tab">
+                <i class="bi bi-calendar-event me-1"></i>
+                Upcoming
+                <span class="badge bg-primary ms-1">{{ upcoming|length }}</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="past-tab" data-bs-toggle="tab"
+                    data-bs-target="#past" type="button" role="tab">
+                <i class="bi bi-clock-history me-1"></i>
+                Past
+                <span class="badge bg-secondary ms-1">{{ past|length }}</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="ticketTabsContent">
+
+        <!-- UPCOMING TAB -->
+        <div class="tab-pane fade show active" id="upcoming" role="tabpanel">
+            {% if not upcoming %}
+            <div class="card text-center py-5 border-0 shadow-sm">
+                <i class="bi bi-calendar-x fs-1 text-muted mb-3"></i>
+                <h5 class="text-muted">No upcoming events</h5>
+                <a href="{{ url_for('public.index') }}" class="btn btn-primary btn-sm mt-2">
+                    Browse Events
+                </a>
+            </div>
+            {% else %}
+            {% for reg in upcoming %}
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-1">{{ reg.event.name }}</h5>
+                            <p class="text-muted small mb-1">
+                                <i class="bi bi-ticket me-1"></i>{{ reg.ticket_type_name }}
+                                &nbsp;|&nbsp;
+                                <i class="bi bi-hash me-1"></i>{{ reg.id[:8] | upper }}
+                            </p>
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-calendar me-1"></i>
+                                {{ reg.event.start_date }} → {{ reg.event.end_date }}
+                            </p>
+                        </div>
+                        <span class="badge bg-success align-self-start">
+                            {{ reg.status | capitalize }}
+                        </span>
                     </div>
 
-                    <div class="card-body mt-4">
-                        <p class="text-muted small mb-1 text-uppercase fw-bold" style="letter-spacing: 1px;">
-                            {{ reg.event.start_datetime.strftime('%b %d, %Y') if reg.event.start_datetime else 'TBD' }}
-                        </p>
-                        <h4 class="card-title fw-bold mb-3">{{ reg.event.name }}</h4>
-                        
-                        <ul class="list-unstyled mb-4">
-                            <li class="mb-2"><i class="bi bi-person text-muted me-2"></i> <strong>Attendee:</strong> {{ reg.attendee_name }}</li>
-                            <li class="mb-2"><i class="bi bi-tag text-muted me-2"></i> <strong>Ticket:</strong> {{ reg.ticket_type_name }} (x{{ reg.quantity }})</li>
-                            <li><i class="bi bi-receipt text-muted me-2"></i> <strong>Order ID:</strong> <span class="text-muted" style="font-size: 0.85rem;">{{ reg.id }}</span></li>
-                        </ul>
+                    <hr class="my-3">
 
-                            {% if reg.status in ['confirmed', 'checked_in'] %}
-                            <div class="mt-auto pt-3 border-top">
-                                <div class="d-flex gap-2">
-                                    <!-- Agenda Button ALWAYS shows for confirmed tickets -->
-                                    <a href="{{ url_for('public.event_detail', event_id=reg.event_id) }}" class="btn btn-outline-primary {% if not (reg.get('qr_url') or reg.get('qr_code_url')) %}w-100{% else %}w-50{% endif %}">
-                                        <i class="bi bi-calendar2-week"></i> Agenda
-                                    </a>
-                                    
-                                    <!-- QR Code Button ONLY shows if a QR code exists -->
-                                    {% if reg.get('qr_url') or reg.get('qr_code_url') %}
-                                    <a href="{{ reg.get('qr_url') or reg.get('qr_code_url') }}" target="_blank" class="btn btn-dark w-50">
-                                        <i class="bi bi-qr-code"></i> QR Code
-                                    </a>
-                                    <a href="{{ url_for('attendee.submit_feedback', event_id=reg.event_id, registration_id=reg.id) }}" class="btn btn-sm btn-outline-primary mt-2">
-                                        <i class="bi bi-star-fill text-warning me-1"></i> Leave Feedback
-                                    </a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        {% elif reg.status == 'pending' %}
-                        <div class="text-center mt-auto pt-3 border-top">
-                            <a href="{{ url_for('registration.payment_summary', registration_id=reg.id) }}" class="btn btn-warning w-100">
-                                Complete Payment
-                            </a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <!-- QR Code -->
+                        {% if reg.qr_code_url %}
+                        <div class="text-center me-3">
+                            <img src="{{ reg.qr_code_url }}" alt="QR Code"
+                                 style="width:90px; height:90px; border-radius:8px;">
                         </div>
                         {% endif %}
+
+                        <div class="d-flex flex-column gap-2 justify-content-center">
+                            <a href="{{ url_for('public.event_detail', event_id=reg.event_id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-calendar3 me-1"></i>View Agenda
+                            </a>
+                            {% if reg.event.status == 'completed' %}
+                            <a href="{{ url_for('events.generate_certificate', event_id=reg.event_id, reg_id=reg.id) }}"
+                               class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-award me-1"></i>Download Certificate
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
+
                 </div>
             </div>
             {% endfor %}
-        {% else %}
-            <div class="col-12 text-center py-5">
-                <div class="bg-light rounded-4 p-5">
-                    <i class="bi bi-ticket-detailed text-muted mb-3" style="font-size: 3rem;"></i>
-                    <h4 class="fw-bold">No tickets yet!</h4>
-                    <p class="text-muted mb-4">You haven't registered for any events yet. Find an event to get started.</p>
-                    <a href="{{ url_for('public.index') }}" class="btn btn-primary px-4 py-2">Explore Events</a>
+            {% endif %}
+        </div>
+
+        <!-- PAST TAB -->
+        <div class="tab-pane fade" id="past" role="tabpanel">
+            {% if not past %}
+            <div class="card text-center py-5 border-0 shadow-sm">
+                <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                <h5 class="text-muted">No past events yet</h5>
+            </div>
+            {% else %}
+            {% for reg in past %}
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-1 text-muted">{{ reg.event.name }}</h5>
+                            <p class="text-muted small mb-1">
+                                <i class="bi bi-ticket me-1"></i>{{ reg.ticket_type_name }}
+                                &nbsp;|&nbsp;
+                                <i class="bi bi-hash me-1"></i>{{ reg.id[:8] | upper }}
+                            </p>
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-calendar me-1"></i>
+                                {{ reg.event.start_date }} → {{ reg.event.end_date }}
+                            </p>
+                        </div>
+                        <span class="badge bg-secondary align-self-start">
+                            {{ reg.status | capitalize }}
+                        </span>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        {% if reg.event.status == 'completed' and reg.status == 'checked_in' %}
+                        <a href="{{ url_for('events.generate_certificate', event_id=reg.event_id, reg_id=reg.id) }}"
+                           class="btn btn-sm btn-success">
+                            <i class="bi bi-award me-1"></i>Download Certificate
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('public.event_detail', event_id=reg.event_id) }}"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye me-1"></i>View Event
+                        </a>
+                    </div>
+
                 </div>
             </div>
-        {% endif %}
+            {% endfor %}
+            {% endif %}
+        </div>
+
     </div>
 </div>
 {% endblock %}

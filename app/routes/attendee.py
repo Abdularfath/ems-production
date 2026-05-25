@@ -14,32 +14,60 @@ attendee_bp = Blueprint('attendee', __name__, url_prefix='/attendee')
 @login_required
 @role_required('attendee')
 def my_events():
-    """Displays all tickets/events the attendee has registered for."""
     uid = session.get('uid')
-    
-    # Fetch all registrations for this user
-        # Change it to attendee_uid!
-    regs_ref = db.collection('registrations').where('attendee_uid', '==', uid).stream()
-    registrations = []
-    
-    for r in regs_ref:
-        reg_data = r.to_dict()
-        reg_data['id'] = r.id
-        
-        # Fetch the associated event details so we can show the Event Name/Date
-        event_doc = db.collection('events').document(reg_data.get('event_id')).get()
-        if event_doc.exists:
-            reg_data['event'] = event_doc.to_dict()
-        else:
-            reg_data['event'] = {'name': 'Event Ended/Deleted', 'start_datetime': None}
-            
-        registrations.append(reg_data)
-        
-    # Sort them newest first
-    fallback_date = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    registrations.sort(key=lambda x: x.get('created_at') or fallback_date, reverse=True)
 
-    return render_template('attendee/my_events.html', registrations=registrations)
+    # Fetch all registrations for this attendee
+    regs_docs = db.collection('registrations') \
+                  .where('attendee_uid', '==', uid) \
+                  .where('status', 'in', ['confirmed', 'checked_in']) \
+                  .stream()
+
+    upcoming = []
+    past = []
+    now = datetime.now(timezone.utc)
+
+    for r in regs_docs:
+        reg = {**r.to_dict(), 'id': r.id}
+
+        # Fetch the parent event to get end date
+        event_doc = db.collection('events').document(reg.get('event_id')).get()
+        if not event_doc.exists:
+            continue
+
+        event_data = {**event_doc.to_dict(), 'id': event_doc.id}
+        reg['event'] = event_data
+
+        # Get event end date — stored as Firestore Timestamp or string
+        end_date = event_data.get('end_date')
+
+        # Handle both Firestore Timestamp and plain string formats
+        if hasattr(end_date, 'tzinfo'):
+            # It's already a datetime (Firestore Timestamp auto-converts)
+            event_end = end_date
+        elif hasattr(end_date, 'seconds'):
+            # Raw Firestore Timestamp object
+            event_end = datetime.fromtimestamp(end_date.seconds, tz=timezone.utc)
+        elif isinstance(end_date, str):
+            try:
+                event_end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+            except ValueError:
+                event_end = now  # fallback: treat as current if unparseable
+        else:
+            event_end = now  # fallback
+
+        if event_end >= now:
+            upcoming.append(reg)
+        else:
+            past.append(reg)
+
+    # Sort upcoming by soonest first, past by most recent first
+    upcoming.sort(key=lambda x: x['event'].get('start_date', ''))
+    past.sort(key=lambda x: x['event'].get('end_date', ''), reverse=True)
+
+    return render_template('attendee/my_events.html',
+                           upcoming=upcoming,
+                           past=past)
+
 @attendee_bp.route('/save_session/<event_id>/<session_id>', methods=['POST'])
 @login_required
 @role_required('attendee')
