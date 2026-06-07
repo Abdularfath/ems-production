@@ -111,7 +111,7 @@ def login():
                 name = user_doc.to_dict().get('name', 'User')
             
             # Validate selected role matches actual role in Firestore
-            selected_role = request.form.get('role', '').strip()
+            selected_role = request.form.get('role_hint', '').strip()
             if selected_role and selected_role != role:
                  flash(f'Incorrect role selected. Please select "{role.capitalize()}" to login.', 'danger')
                  return redirect(url_for('auth.login'))
