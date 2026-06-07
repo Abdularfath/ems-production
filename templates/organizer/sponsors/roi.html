@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Sponsor ROI — {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-graph-up-arrow me-2 text-success"></i>Sponsor ROI Summary
+            </h3>
+            <p class="text-muted mb-0">{{ event.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('events.sponsor_dashboard', event_id=event_id) }}"
+               class="btn btn-outline-warning">
+                <i class="bi bi-bar-chart me-1"></i>Dashboard
+            </a>
+            <a href="{{ url_for('events.list_events') }}"
+               class="btn btn-outline-secondary">Back</a>
+        </div>
+    </div>
+
+    <!-- Total Summary -->
+    <div class="card border-0 shadow-sm mb-4 bg-success text-white">
+        <div class="card-body text-center py-4">
+            <h6 class="mb-1 opacity-75">Total Sponsorship Raised</h6>
+            <h1 class="fw-bold mb-0">₹{{ "{:,.0f}".format(total_raised) }}</h1>
+            <p class="mb-0 opacity-75 mt-1">across {{ sponsors|length }} sponsors</p>
+        </div>
+    </div>
+
+    <!-- ROI Table -->
+    {% if sponsors %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sponsor</th>
+                            <th>Tier</th>
+                            <th>Amount Paid</th>
+                            <th>Leads Captured</th>
+                            <th>Deliverables</th>
+                            <th>Progress</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sponsors %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if s.logo_url %}
+                                    <img src="{{ s.logo_url }}"
+                                         class="rounded me-2"
+                                         style="width:32px;height:32px;object-fit:cover;">
+                                    {% endif %}
+                                    <strong>{{ s.company_name }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if s.tier == 'Gold' %}bg-warning text-dark
+                                    {% elif s.tier == 'Silver' %}bg-secondary
+                                    {% elif s.tier == 'Bronze' %}bg-danger
+                                    {% else %}bg-primary{% endif %}">
+                                    {{ s.tier }}
+                                </span>
+                            </td>
+                            <td class="fw-bold text-success">
+                                ₹{{ "{:,.0f}".format(s.amount) }}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-primary fs-6">
+                                    {{ s.leads_count }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {{ s.completed_d }} / {{ s.total_d }}
+                            </td>
+                            <td style="min-width:120px;">
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar bg-success"
+                                         style="width:{{ s.progress }}%"></div>
+                                </div>
+                                <small class="text-muted">{{ s.progress }}%</small>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('events.export_leads',
+                                                    event_id=event_id,
+                                                    sponsor_id=s.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download me-1"></i>Leads CSV
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

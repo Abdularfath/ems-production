@@ -119,6 +119,55 @@
           {% endif %}
       </div>
       <!-- ⬆️ END OF AGENDA SECTION ⬆️ -->
+       {% if sponsors %}
+<div class="mt-5">
+    <h4 class="fw-bold mb-3">
+        <i class="bi bi-building me-2 text-warning"></i>Our Sponsors
+    </h4>
+    <div class="row g-3">
+        {% for sponsor in sponsors %}
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    {% if sponsor.logo_url %}
+                    <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.company_name }}"
+                         class="rounded mb-3"
+                         style="width:80px;height:80px;object-fit:cover;">
+                    {% else %}
+                    <div class="bg-warning rounded mx-auto mb-3 d-flex
+                                align-items-center justify-content-center"
+                         style="width:80px;height:80px;">
+                        <i class="bi bi-building text-white fs-3"></i>
+                    </div>
+                    {% endif %}
+
+                    <h6 class="fw-bold">{{ sponsor.company_name }}</h6>
+                    <span class="badge
+                        {% if sponsor.tier == 'Gold' %}bg-warning text-dark
+                        {% elif sponsor.tier == 'Silver' %}bg-secondary
+                        {% elif sponsor.tier == 'Bronze' %}bg-danger
+                        {% else %}bg-primary{% endif %} mb-2">
+                        {{ sponsor.tier }} Sponsor
+                    </span>
+
+                    {% if session.get('role') == 'attendee' %}
+                    <form method="POST"
+                          action="{{ url_for('attendee.connect_sponsor',
+                                            event_id=event.id,
+                                            sponsor_id=sponsor.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning w-100 mt-2">
+                            <i class="bi bi-person-plus me-1"></i>Connect
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
     </div> <!-- ✅ THIS CLOSES THE LEFT COLUMN CORRECTLY ✅ -->
  

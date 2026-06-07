@@ -469,3 +469,144 @@ def view_feedback(event_id):
     avg_rating = round(sum([f['rating'] for f in feedbacks]) / len(feedbacks), 1) if feedbacks else 0
     
     return render_template('organizer/events/feedback.html', event=event_data, feedbacks=feedbacks, avg_rating=avg_rating)
+
+@events_bp.route('/<event_id>/sponsor_dashboard')
+@login_required
+@role_required('organizer')
+def sponsor_dashboard(event_id):
+    doc, event_data = get_event_or_403(event_id)
+    if doc is None:
+        return redirect(url_for('events.list_events'))
+
+    # Fetch all sponsors
+    sponsors_docs = db.collection('events').document(event_id)\
+                      .collection('sponsors').stream()
+    sponsors = []
+    total_amount = 0
+
+    for s in sponsors_docs:
+        sponsor = {**s.to_dict(), 'id': s.id}
+        total_amount += sponsor.get('amount', 0)
+
+        # Fetch deliverables for each sponsor
+        deliverables_docs = db.collection('events').document(event_id)\
+                              .collection('sponsors').document(s.id)\
+                              .collection('deliverables').stream()
+        deliverables = [d.to_dict() for d in deliverables_docs]
+
+        total_d     = len(deliverables)
+        completed_d = sum(1 for d in deliverables if d.get('status') == 'completed')
+        progress    = int((completed_d / total_d) * 100) if total_d > 0 else 0
+
+        sponsor['total_deliverables']     = total_d
+        sponsor['completed_deliverables'] = completed_d
+        sponsor['progress_pct']           = progress
+        sponsors.append(sponsor)
+
+    # Sort by amount descending
+    sponsors.sort(key=lambda x: x.get('amount', 0), reverse=True)
+
+    # Tier breakdown
+    tier_counts = {}
+    for s in sponsors:
+        tier = s.get('tier', 'Custom')
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+    return render_template(
+        'organizer/sponsors/dashboard.html',
+        event=event_data,
+        event_id=event_id,
+        sponsors=sponsors,
+        total_amount=total_amount,
+        tier_counts=tier_counts
+    )
+
+@events_bp.route('/<event_id>/sponsors/<sponsor_id>/export_leads')
+@login_required
+@role_required('organizer')
+def export_leads(event_id, sponsor_id):
+    doc, data = get_event_or_403(event_id)
+    if doc is None:
+        return "Unauthorized", 403
+
+    sponsor_doc = db.collection('events').document(event_id)\
+                    .collection('sponsors').document(sponsor_id).get()
+    if not sponsor_doc.exists:
+        return "Sponsor not found", 404
+
+    sponsor_data = sponsor_doc.to_dict()
+
+    leads_docs = db.collection('events').document(event_id)\
+                   .collection('sponsors').document(sponsor_id)\
+                   .collection('leads').stream()
+
+    si = StringIO()
+    si.write('\ufeff')  # UTF-8 BOM for Excel
+    cw = csv.writer(si)
+    cw.writerow(['Attendee Name', 'Email', 'Connected At'])
+
+    for lead in leads_docs:
+        lead_data = lead.to_dict()
+        connected_at = lead_data.get('connected_at')
+        date_str = connected_at.strftime('%Y-%m-%d %H:%M') if connected_at else 'N/A'
+        cw.writerow([
+            lead_data.get('attendee_name', ''),
+            lead_data.get('attendee_email', ''),
+            date_str
+        ])
+
+    return Response(
+        si.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition':
+                 f'attachment;filename=leads_{sponsor_data.get("company_name","sponsor")}.csv'}
+    )
+
+
+@events_bp.route('/<event_id>/sponsor_roi')
+@login_required
+@role_required('organizer')
+def sponsor_roi(event_id):
+    doc, event_data = get_event_or_403(event_id)
+    if doc is None:
+        return redirect(url_for('events.list_events'))
+
+    sponsors_docs = db.collection('events').document(event_id)\
+                      .collection('sponsors').stream()
+    sponsors = []
+    total_raised = 0
+
+    for s in sponsors_docs:
+        sponsor = {**s.to_dict(), 'id': s.id}
+        total_raised += sponsor.get('amount', 0)
+
+        # Deliverables
+        deliverables_docs = db.collection('events').document(event_id)\
+                              .collection('sponsors').document(s.id)\
+                              .collection('deliverables').stream()
+        deliverables  = [d.to_dict() for d in deliverables_docs]
+        total_d       = len(deliverables)
+        completed_d   = sum(1 for d in deliverables if d.get('status') == 'completed')
+        progress      = int((completed_d / total_d) * 100) if total_d > 0 else 0
+
+        # Leads
+        leads_docs = db.collection('events').document(event_id)\
+                       .collection('sponsors').document(s.id)\
+                       .collection('leads').stream()
+        leads_count = len(list(leads_docs))
+
+        sponsor['total_d']     = total_d
+        sponsor['completed_d'] = completed_d
+        sponsor['progress']    = progress
+        sponsor['leads_count'] = leads_count
+        sponsors.append(sponsor)
+
+    sponsors.sort(key=lambda x: x.get('amount', 0), reverse=True)
+
+    return render_template(
+        'organizer/sponsors/roi.html',
+        event=event_data,
+        event_id=event_id,
+        sponsors=sponsors,
+        total_raised=total_raised
+    )

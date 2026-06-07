@@ -33,7 +33,7 @@ def signup():
             flash('Password must be at least 6 characters.', 'danger')
             return redirect(url_for('auth.signup'))
  
-        if role not in ['attendee', 'organizer']:
+        if role not in ['attendee', 'organizer', 'sponsor']:
             role = 'attendee'
  
         try:
@@ -109,19 +109,25 @@ def login():
             if user_doc.exists:
                 role = user_doc.to_dict().get('role', 'attendee')
                 name = user_doc.to_dict().get('name', 'User')
- 
+            
+            # Validate selected role matches actual role in Firestore
+            selected_role = request.form.get('role', '').strip()
+            if selected_role and selected_role != role:
+                 flash(f'Incorrect role selected. Please select "{role.capitalize()}" to login.', 'danger')
+                 return redirect(url_for('auth.login'))
             # Set session
             session['uid']   = uid
             session['email'] = email
             session['role']  = role
-            session['name']  = name 
- 
+            session['name']  = name
             flash(f'Welcome back!', 'success')
  
             if role == 'organizer':
                 return redirect(url_for('organizer.dashboard'))
             if role == 'admin':
                 return redirect(url_for('admin.dashboard'))
+            if role == 'sponsor':
+                return redirect(url_for('sponsor_portal.dashboard'))
             return redirect(url_for('attendee.my_events'))
  
         except Exception as e:

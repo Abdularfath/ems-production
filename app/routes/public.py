@@ -112,13 +112,19 @@ def event_detail(event_id):
 
     # MAKE SURE to pass `agenda` and `saved_session_ids` to your render_template!
     # Example: return render_template('public/event_details.html', event=event_data, agenda=agenda, saved_session_ids=saved_session_ids)
- 
+    # Fetch sponsors for public display
+        # Fetch sponsors for public display
+    sponsors_docs = db.collection('events').document(event_id)\
+                      .collection('sponsors').stream()
+    sponsors = [{**s.to_dict(), 'id': s.id} for s in sponsors_docs]
+
     return render_template('public/event_detail.html',
                            event=event,
                            venue=venue,
                            ticket_types=ticket_types,
                            agenda=agenda,
-                           saved_session_ids=saved_session_ids)
+                           saved_session_ids=saved_session_ids,
+                           sponsors=sponsors)
 @public_bp.route('/api/events/<event_id>/validate_promo/<code>', methods=['GET'])
 def validate_promo(event_id, code):
     """API Endpoint to validate a promo code via AJAX."""

@@ -10,6 +10,8 @@ from google.cloud.firestore import SERVER_TIMESTAMP
 attendee_bp = Blueprint('attendee', __name__, url_prefix='/attendee')
 
 # 2. The Route
+from datetime import datetime, timezone
+
 @attendee_bp.route('/my-events')
 @login_required
 @role_required('attendee')
@@ -67,7 +69,6 @@ def my_events():
     return render_template('attendee/my_events.html',
                            upcoming=upcoming,
                            past=past)
-
 @attendee_bp.route('/save_session/<event_id>/<session_id>', methods=['POST'])
 @login_required
 @role_required('attendee')
@@ -151,3 +152,36 @@ def submit_feedback(event_id, registration_id):
     event_data = {**event_doc.to_dict(), 'id': event_id} if event_doc.exists else {}
     
     return render_template('attendee/feedback.html', event=event_data, registration_id=registration_id)
+
+@attendee_bp.route('/connect_sponsor/<event_id>/<sponsor_id>', methods=['POST'])
+@login_required
+@role_required('attendee')
+def connect_sponsor(event_id, sponsor_id):
+    uid   = session.get('uid')
+    email = session.get('email')
+    name  = session.get('name', '')
+
+    # Check if already connected
+    existing = db.collection('events').document(event_id)\
+                 .collection('sponsors').document(sponsor_id)\
+                 .collection('leads')\
+                 .where('attendee_uid', '==', uid)\
+                 .limit(1).stream()
+
+    if list(existing):
+        flash('You are already connected with this sponsor!', 'info')
+        return redirect(url_for('public.event_detail', event_id=event_id))
+
+    # Add lead
+    from google.cloud.firestore import SERVER_TIMESTAMP
+    db.collection('events').document(event_id)\
+      .collection('sponsors').document(sponsor_id)\
+      .collection('leads').add({
+          'attendee_uid':   uid,
+          'attendee_name':  name,
+          'attendee_email': email,
+          'connected_at':   SERVER_TIMESTAMP
+      })
+
+    flash('Successfully connected with sponsor!', 'success')
+    return redirect(url_for('public.event_detail', event_id=event_id))
