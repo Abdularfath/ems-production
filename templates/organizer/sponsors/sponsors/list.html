@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Sponsors — {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-building me-2 text-warning"></i>Sponsor Management
+            </h3>
+            <p class="text-muted mb-0">{{ event.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('sponsors.add_sponsor', event_id=event_id) }}" 
+               class="btn btn-warning">
+                <i class="bi bi-plus-lg me-1"></i>Add Sponsor
+            </a>
+            <a href="{{ url_for('sponsors.list_exhibitors', event_id=event_id) }}"
+            class="btn btn-outline-warning">
+            <i class="bi bi-shop me-1"></i>View Exhibitors
+            </a>
+            <a href="{{ url_for('events.list_events') }}" 
+               class="btn btn-outline-secondary">Back to Events</a>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Total Sponsors</h6>
+                <h2 class="fw-bold text-warning">{{ sponsors|length }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Total Sponsorship Raised</h6>
+                <h2 class="fw-bold text-success">₹{{ "{:,.0f}".format(total_amount) }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Tiers</h6>
+                <h2 class="fw-bold text-primary">
+                    {{ sponsors | map(attribute='tier') | list | unique | list | length }}
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    
+
+    {% if sponsors %}
+    <div class="row g-3">
+        {% for sponsor in sponsors %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        {% if sponsor.logo_url %}
+                        <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.company_name }}"
+                             class="rounded me-3" style="width:60px;height:60px;object-fit:cover;">
+                        {% else %}
+                        <div class="bg-warning rounded me-3 d-flex align-items-center justify-content-center"
+                             style="width:60px;height:60px;">
+                            <i class="bi bi-building text-white fs-4"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h5 class="fw-bold mb-0">{{ sponsor.company_name }}</h5>
+                            <span class="badge 
+                                {% if sponsor.tier == 'Gold' %}bg-warning text-dark
+                                {% elif sponsor.tier == 'Silver' %}bg-secondary
+                                {% elif sponsor.tier == 'Bronze' %}bg-danger
+                                {% else %}bg-primary{% endif %}">
+                                {{ sponsor.tier }}
+                            </span>
+                            {% if sponsor.is_exhibitor %}
+                            <span class="badge bg-warning text-dark ms-1">
+                                <i class="bi bi-shop me-1"></i>Exhibitor
+                                {% if sponsor.booth_number %}— Booth {{ sponsor.booth_number }}{% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <p class="mb-1 small">
+                        <i class="bi bi-person me-1"></i>{{ sponsor.contact_person }}
+                    </p>
+                    <p class="mb-1 small">
+                        <i class="bi bi-envelope me-1"></i>{{ sponsor.email }}
+                    </p>
+                    <p class="mb-3 small">
+                        <i class="bi bi-currency-rupee me-1"></i>
+                        <strong>₹{{ "{:,.0f}".format(sponsor.amount) }}</strong>
+                    </p>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="{{ url_for('sponsors.edit_sponsor', event_id=event_id, sponsor_id=sponsor.id) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil me-1"></i>Edit
+                        </a>
+                        <a href="{{ url_for('deliverables.list_deliverables', event_id=event_id, sponsor_id=sponsor.id) }}"
+                          class="btn btn-sm btn-outline-success">
+                          <i class="bi bi-list-check me-1"></i>Deliverables
+                        </a>
+                        <form method="POST"
+                        action="{{ url_for('sponsors.toggle_exhibitor', event_id=event_id, sponsor_id=sponsor.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm 
+                        {% if sponsor.is_exhibitor %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                        <i class="bi bi-shop me-1"></i>
+                        {% if sponsor.is_exhibitor %}Exhibitor ✓{% else %}Mark Exhibitor{% endif %}
+                    </button>
+                </form>
+                        <form method="POST" action="{{ url_for('sponsors.delete_sponsor', event_id=event_id, sponsor_id=sponsor.id) }}"
+                              onsubmit="return confirm('Delete this sponsor?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash me-1"></i>Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-building fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No sponsors added yet.</p>
+        <a href="{{ url_for('sponsors.add_sponsor', event_id=event_id) }}" 
+           class="btn btn-warning">Add First Sponsor</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -119,7 +119,8 @@
           {% endif %}
       </div>
       <!-- ⬆️ END OF AGENDA SECTION ⬆️ -->
-       {% if sponsors %}
+<!-- SPONSORS SECTION -->
+{% if sponsors %}
 <div class="mt-5">
     <h4 class="fw-bold mb-3">
         <i class="bi bi-building me-2 text-warning"></i>Our Sponsors
@@ -140,7 +141,6 @@
                         <i class="bi bi-building text-white fs-3"></i>
                     </div>
                     {% endif %}
-
                     <h6 class="fw-bold">{{ sponsor.company_name }}</h6>
                     <span class="badge
                         {% if sponsor.tier == 'Gold' %}bg-warning text-dark
@@ -149,18 +149,107 @@
                         {% else %}bg-primary{% endif %} mb-2">
                         {{ sponsor.tier }} Sponsor
                     </span>
-
                     {% if session.get('role') == 'attendee' %}
                     <form method="POST"
                           action="{{ url_for('attendee.connect_sponsor',
                                             event_id=event.id,
                                             sponsor_id=sponsor.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-warning w-100 mt-2">
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-warning w-100 mt-2">
                             <i class="bi bi-person-plus me-1"></i>Connect
                         </button>
                     </form>
                     {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- EXHIBITORS SECTION -->
+{% if exhibitors %}
+<div class="mt-5">
+    <h4 class="fw-bold mb-3">
+        <i class="bi bi-shop me-2 text-warning"></i>Exhibitors & Booths
+    </h4>
+    <p class="text-muted mb-3">
+        Visit these exhibitor booths at the venue for demos, products, and networking.
+    </p>
+    <div class="row g-3">
+        {% for ex in exhibitors %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-start">
+
+                        <!-- Logo -->
+                        {% if ex.logo_url %}
+                        <img src="{{ ex.logo_url }}" alt="{{ ex.company_name }}"
+                             class="rounded me-3"
+                             style="width:60px;height:60px;object-fit:cover;flex-shrink:0;">
+                        {% else %}
+                        <div class="bg-warning rounded me-3 d-flex align-items-center
+                                    justify-content-center"
+                             style="width:60px;height:60px;flex-shrink:0;">
+                            <i class="bi bi-shop text-white fs-4"></i>
+                        </div>
+                        {% endif %}
+
+                        <!-- Details -->
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="fw-bold mb-1">{{ ex.company_name }}</h6>
+                                    <span class="badge
+                                        {% if ex.tier == 'Gold' %}bg-warning text-dark
+                                        {% elif ex.tier == 'Silver' %}bg-secondary
+                                        {% elif ex.tier == 'Bronze' %}bg-danger
+                                        {% else %}bg-primary{% endif %}">
+                                        {{ ex.tier }}
+                                    </span>
+                                    <span class="badge bg-warning text-dark ms-1">
+                                        <i class="bi bi-shop me-1"></i>Exhibitor
+                                    </span>
+                                </div>
+                                {% if ex.booth_number %}
+                                <span class="badge bg-dark fs-6">
+                                    Booth {{ ex.booth_number }}
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            {% if ex.booth_description %}
+                            <p class="text-muted small mt-2 mb-1">
+                                {{ ex.booth_description }}
+                            </p>
+                            {% endif %}
+
+                            {% if ex.team_members %}
+                            <p class="small mb-2">
+                                <i class="bi bi-people me-1 text-muted"></i>
+                                {{ ex.team_members }}
+                            </p>
+                            {% endif %}
+
+                            {% if session.get('role') == 'attendee' %}
+                            <form method="POST"
+                                  action="{{ url_for('attendee.connect_sponsor',
+                                                    event_id=event.id,
+                                                    sponsor_id=ex.id) }}">
+                                <input type="hidden" name="csrf_token"
+                                       value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="btn btn-sm btn-warning mt-1">
+                                    <i class="bi bi-person-plus me-1"></i>
+                                    Connect at Booth
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

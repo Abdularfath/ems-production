@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}Sponsor Dashboard — {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-bar-chart-fill me-2 text-warning"></i>Sponsor Dashboard
+            </h3>
+            <p class="text-muted mb-0">{{ event.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('sponsors.list_sponsors', event_id=event_id) }}"
+               class="btn btn-outline-warning">
+                <i class="bi bi-building me-1"></i>Manage Sponsors
+            </a>
+            <a href="{{ url_for('events.list_events') }}"
+               class="btn btn-outline-secondary">Back to Events</a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Total Sponsors</h6>
+                <h2 class="fw-bold text-warning">{{ sponsors|length }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Total Raised</h6>
+                <h2 class="fw-bold text-success">₹{{ "{:,.0f}".format(total_amount) }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Avg per Sponsor</h6>
+                <h2 class="fw-bold text-primary">
+                    ₹{{ "{:,.0f}".format(total_amount / sponsors|length) if sponsors|length > 0 else 0 }}
+                </h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <h6 class="text-muted">Tier Breakdown</h6>
+                <div class="mt-1">
+                    {% for tier, count in tier_counts.items() %}
+                    <span class="badge 
+                        {% if tier == 'Gold' %}bg-warning text-dark
+                        {% elif tier == 'Silver' %}bg-secondary
+                        {% elif tier == 'Bronze' %}bg-danger
+                        {% else %}bg-primary{% endif %} me-1">
+                        {{ tier }}: {{ count }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sponsor Table -->
+    {% if sponsors %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sponsor</th>
+                            <th>Tier</th>
+                            <th>Amount</th>
+                            <th>Contact</th>
+                            <th>Deliverables</th>
+                            <th>Progress</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sponsors %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if s.logo_url %}
+                                    <img src="{{ s.logo_url }}" alt="{{ s.company_name }}"
+                                         class="rounded me-2"
+                                         style="width:36px;height:36px;object-fit:cover;">
+                                    {% else %}
+                                    <div class="bg-warning rounded me-2 d-flex align-items-center
+                                                justify-content-center"
+                                         style="width:36px;height:36px;">
+                                        <i class="bi bi-building text-white small"></i>
+                                    </div>
+                                    {% endif %}
+                                    <strong>{{ s.company_name }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if s.tier == 'Gold' %}bg-warning text-dark
+                                    {% elif s.tier == 'Silver' %}bg-secondary
+                                    {% elif s.tier == 'Bronze' %}bg-danger
+                                    {% else %}bg-primary{% endif %}">
+                                    {{ s.tier }}
+                                </span>
+                            </td>
+                            <td class="fw-semibold text-success">
+                                ₹{{ "{:,.0f}".format(s.amount) }}
+                            </td>
+                            <td>
+                                <small>{{ s.contact_person }}<br>
+                                <span class="text-muted">{{ s.email }}</span></small>
+                            </td>
+                            <td class="text-center">
+                                <span class="text-success fw-bold">{{ s.completed_deliverables }}</span>
+                                / {{ s.total_deliverables }}
+                            </td>
+                            <td style="min-width:120px;">
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar bg-success"
+                                         style="width:{{ s.progress_pct }}%"></div>
+                                </div>
+                                <small class="text-muted">{{ s.progress_pct }}%</small>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <a href="{{ url_for('deliverables.list_deliverables',
+                                                        event_id=event_id, sponsor_id=s.id) }}"
+                                       class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-list-check"></i>
+                                    </a>
+                                    <a href="{{ url_for('sponsors.edit_sponsor',
+                                                        event_id=event_id, sponsor_id=s.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-building fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No sponsors added yet.</p>
+        <a href="{{ url_for('sponsors.list_sponsors', event_id=event_id) }}"
+           class="btn btn-warning">Add First Sponsor</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

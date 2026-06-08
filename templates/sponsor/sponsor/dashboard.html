@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}My Sponsorships{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <h3 class="fw-bold mb-1">
+            <i class="bi bi-building me-2 text-warning"></i>My Sponsorships
+        </h3>
+        <p class="text-muted">Welcome! Here are all the events you are sponsoring.</p>
+    </div>
+
+    {% if my_sponsorships %}
+    <div class="row g-4">
+        {% for item in my_sponsorships %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-1">{{ item.event.name }}</h5>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar me-1"></i>
+                                {{ item.event.start_date }}
+                            </small>
+                        </div>
+                        <span class="badge
+                            {% if item.sponsor.tier == 'Gold' %}bg-warning text-dark
+                            {% elif item.sponsor.tier == 'Silver' %}bg-secondary
+                            {% elif item.sponsor.tier == 'Bronze' %}bg-danger
+                            {% else %}bg-primary{% endif %}">
+                            {{ item.sponsor.tier }}
+                        </span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-muted">Deliverables Progress</small>
+                            <small class="fw-semibold">
+                                {{ item.completed_d }}/{{ item.total_d }} completed
+                            </small>
+                        </div>
+                        <div class="progress" style="height:8px;">
+                            <div class="progress-bar bg-success"
+                                 style="width:{{ item.progress }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold text-success">
+                            ₹{{ "{:,.0f}".format(item.sponsor.amount) }}
+                        </span>
+                        <a href="{{ url_for('sponsor_portal.event_detail',
+                                            event_id=item.event.id) }}"
+                           class="btn btn-sm btn-warning">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-building fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No sponsorships found for your account.</p>
+        <p class="text-muted small">
+            Your email must match the one the organizer used when adding you as a sponsor.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

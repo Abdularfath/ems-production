@@ -110,13 +110,14 @@ def event_detail(event_id):
         saved_docs = db.collection('attendees').document(session.get('uid')).collection('saved_sessions').where('event_id', '==', event_id).stream()
         saved_session_ids = [d.id for d in saved_docs]
 
-    # MAKE SURE to pass `agenda` and `saved_session_ids` to your render_template!
-    # Example: return render_template('public/event_details.html', event=event_data, agenda=agenda, saved_session_ids=saved_session_ids)
-    # Fetch sponsors for public display
-        # Fetch sponsors for public display
+    # Fetch sponsors and exhibitors for public display
     sponsors_docs = db.collection('events').document(event_id)\
                       .collection('sponsors').stream()
-    sponsors = [{**s.to_dict(), 'id': s.id} for s in sponsors_docs]
+    all_sponsors = [{**s.to_dict(), 'id': s.id} for s in sponsors_docs]
+
+    # Separate into sponsors and exhibitors
+    sponsors   = [s for s in all_sponsors if not s.get('is_exhibitor', False)]
+    exhibitors = [s for s in all_sponsors if s.get('is_exhibitor', False)]
 
     return render_template('public/event_detail.html',
                            event=event,
@@ -124,7 +125,8 @@ def event_detail(event_id):
                            ticket_types=ticket_types,
                            agenda=agenda,
                            saved_session_ids=saved_session_ids,
-                           sponsors=sponsors)
+                           sponsors=sponsors,
+                           exhibitors=exhibitors)
 @public_bp.route('/api/events/<event_id>/validate_promo/<code>', methods=['GET'])
 def validate_promo(event_id, code):
     """API Endpoint to validate a promo code via AJAX."""

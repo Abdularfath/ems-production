@@ -56,18 +56,21 @@ def add_sponsor(event_id):
                 gravity='center'
             )
             logo_url = upload_result.get('secure_url', '')
-
-        sponsor_data = {
-            'company_name':   company_name,
-            'contact_person': contact_person,
-            'email':          email,
-            'phone':          phone,
-            'tier':           tier,
-            'amount':         amount,
-            'logo_url':       logo_url,
-            'organizer_uid':  session.get('uid'),
-            'created_at':     SERVER_TIMESTAMP
-        }
+            sponsor_data = {
+                'company_name':     company_name,
+                'contact_person':   contact_person,
+                'email':            email,
+                'phone':            phone,
+                'tier':             tier,
+                'amount':           amount,
+                'logo_url':         logo_url,
+                'organizer_uid':    session.get('uid'),
+                'created_at':       SERVER_TIMESTAMP,
+                'is_exhibitor':     False,
+                'booth_number':     '',
+                'booth_description': '',
+                'team_members':     ''
+                }
 
         db.collection('events').document(event_id).collection('sponsors').add(sponsor_data)
         flash(f'Sponsor {company_name} added successfully!', 'success')
@@ -103,14 +106,21 @@ def edit_sponsor(event_id, sponsor_id):
         amount         = float(request.form.get('amount', 0))
         logo_file      = request.files.get('logo')
 
+        booth_number      = request.form.get('booth_number', '').strip()
+        booth_description = request.form.get('booth_description', '').strip()
+        team_members      = request.form.get('team_members', '').strip()
+        
         update_data = {
-            'company_name':   company_name,
-            'contact_person': contact_person,
-            'email':          email,
-            'phone':          phone,
-            'tier':           tier,
-            'amount':         amount,
-        }
+            'company_name':     company_name,
+            'contact_person':   contact_person,
+            'email':            email,
+            'phone':            phone,
+            'tier':             tier,
+            'amount':           amount,
+            'booth_number':     booth_number,
+            'booth_description': booth_description,
+            'team_members':     team_members
+            }
 
         if logo_file and logo_file.filename:
             upload_result = cloudinary.uploader.upload(
@@ -139,3 +149,53 @@ def delete_sponsor(event_id, sponsor_id):
     db.collection('events').document(event_id).collection('sponsors').document(sponsor_id).delete()
     flash('Sponsor removed.', 'info')
     return redirect(url_for('sponsors.list_sponsors', event_id=event_id))
+
+@sponsors_bp.route('/<sponsor_id>/toggle_exhibitor', methods=['POST'])
+@login_required
+@role_required('organizer')
+def toggle_exhibitor(event_id, sponsor_id):
+    """Toggle sponsor's exhibitor status."""
+    sponsor_ref = db.collection('events').document(event_id)\
+                    .collection('sponsors').document(sponsor_id)
+    sponsor_doc = sponsor_ref.get()
+
+    if not sponsor_doc.exists:
+        flash('Sponsor not found.', 'danger')
+        return redirect(url_for('sponsors.list_sponsors', event_id=event_id))
+
+    current = sponsor_doc.to_dict().get('is_exhibitor', False)
+    sponsor_ref.update({'is_exhibitor': not current})
+
+    if not current:
+        flash('Sponsor marked as Exhibitor!', 'success')
+    else:
+        flash('Exhibitor status removed.', 'info')
+
+    return redirect(url_for('sponsors.list_sponsors', event_id=event_id))
+
+
+@sponsors_bp.route('/exhibitors')
+@login_required
+@role_required('organizer')
+def list_exhibitors(event_id):
+    """Show all exhibitors for this event."""
+    doc, event_data = get_event_or_403(event_id)
+    if not doc:
+        return redirect(url_for('events.list_events'))
+
+    sponsors_docs = db.collection('events').document(event_id)\
+                      .collection('sponsors')\
+                      .stream()
+
+    exhibitors = []
+    for s in sponsors_docs:
+        data = {**s.to_dict(), 'id': s.id}
+        if data.get('is_exhibitor', False):
+            exhibitors.append(data)
+
+    return render_template(
+        'organizer/sponsors/exhibitors.html',
+        event=event_data,
+        event_id=event_id,
+        exhibitors=exhibitors
+    )

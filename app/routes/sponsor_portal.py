@@ -93,6 +93,8 @@ def event_detail(event_id):
     completed_d = sum(1 for d in deliverables if d.get('status') == 'completed')
     progress    = int((completed_d / total_d) * 100) if total_d > 0 else 0
 
+    is_exhibitor = sponsor_record.get('is_exhibitor', False)
+
     return render_template('sponsor/event_detail.html',
                            event=event_data,
                            event_id=event_id,
@@ -100,4 +102,5 @@ def event_detail(event_id):
                            deliverables=deliverables,
                            total_d=total_d,
                            completed_d=completed_d,
-                           progress=progress)
+                           progress=progress,
+                           is_exhibitor=is_exhibitor)

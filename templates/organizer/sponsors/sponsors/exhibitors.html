@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}Exhibitors — {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-shop me-2 text-warning"></i>Exhibitor Management
+            </h3>
+            <p class="text-muted mb-0">{{ event.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('sponsors.list_sponsors', event_id=event_id) }}"
+               class="btn btn-outline-warning">
+                <i class="bi bi-building me-1"></i>All Sponsors
+            </a>
+            <a href="{{ url_for('events.list_events') }}"
+               class="btn btn-outline-secondary">Back to Events</a>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="card border-0 shadow-sm mb-4 text-center p-3">
+        <h6 class="text-muted">Total Exhibitors</h6>
+        <h2 class="fw-bold text-warning">{{ exhibitors|length }}</h2>
+    </div>
+
+    {% if exhibitors %}
+    <div class="row g-3">
+        {% for ex in exhibitors %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <!-- Header Row -->
+                    <div class="d-flex align-items-center mb-3">
+                        {% if ex.logo_url %}
+                        <img src="{{ ex.logo_url }}" alt="{{ ex.company_name }}"
+                             class="rounded me-3"
+                             style="width:60px;height:60px;object-fit:cover;">
+                        {% else %}
+                        <div class="bg-warning rounded me-3 d-flex align-items-center
+                                    justify-content-center"
+                             style="width:60px;height:60px;">
+                            <i class="bi bi-shop text-white fs-4"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h5 class="fw-bold mb-0">{{ ex.company_name }}</h5>
+                            <span class="badge
+                                {% if ex.tier == 'Gold' %}bg-warning text-dark
+                                {% elif ex.tier == 'Silver' %}bg-secondary
+                                {% elif ex.tier == 'Bronze' %}bg-danger
+                                {% else %}bg-primary{% endif %}">
+                                {{ ex.tier }}
+                            </span>
+                            <span class="badge bg-warning text-dark ms-1">
+                                <i class="bi bi-shop me-1"></i>Exhibitor
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Booth Details -->
+                    <div class="bg-light rounded p-3 mb-3">
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <small class="text-muted">Booth Number</small>
+                                <p class="fw-bold mb-0">
+                                    {{ ex.booth_number if ex.booth_number else 'Not assigned' }}
+                                </p>
+                            </div>
+                            {% if ex.booth_description %}
+                            <div class="col-12">
+                                <small class="text-muted">Description</small>
+                                <p class="mb-0 small">{{ ex.booth_description }}</p>
+                            </div>
+                            {% endif %}
+                            {% if ex.team_members %}
+                            <div class="col-12">
+                                <small class="text-muted">Team at Booth</small>
+                                <p class="mb-0 small">{{ ex.team_members }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('sponsors.edit_sponsor',
+                                            event_id=event_id,
+                                            sponsor_id=ex.id) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil me-1"></i>Edit Booth
+                        </a>
+                        <a href="{{ url_for('deliverables.list_deliverables',
+                                            event_id=event_id,
+                                            sponsor_id=ex.id) }}"
+                           class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-list-check me-1"></i>Deliverables
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-shop fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No exhibitors yet.</p>
+        <p class="text-muted small">Go to Sponsors and click
+           "Mark Exhibitor" on any sponsor to add them here.</p>
+        <a href="{{ url_for('sponsors.list_sponsors', event_id=event_id) }}"
+           class="btn btn-warning">Go to Sponsors</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
