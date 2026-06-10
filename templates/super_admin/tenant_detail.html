@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}{{ tenant.company_name }} — Tenant Detail{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">{{ tenant.company_name }}</h3>
+            <p class="text-muted mb-0">Tenant Detail View</p>
+        </div>
+        <a href="{{ url_for('super_admin.list_tenants') }}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Tenants
+        </a>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- Tenant Info -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-building me-2 text-danger"></i>
+                        Company Info
+                    </h5>
+                    <p class="mb-2">
+                        <strong>Status:</strong>
+                        <span class="badge ms-1
+                            {% if tenant.status == 'active' %}bg-success
+                            {% else %}bg-danger{% endif %}">
+                            {{ tenant.status | title }}
+                        </span>
+                    </p>
+                    <p class="mb-2">
+                        <strong>Contact:</strong>
+                        {{ tenant.contact_person }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Email:</strong>
+                        {{ tenant.contact_email }}
+                    </p>
+                    {% if tenant.phone %}
+                    <p class="mb-3">
+                        <strong>Phone:</strong> {{ tenant.phone }}
+                    </p>
+                    {% endif %}
+
+                    <form method="POST"
+                          action="{{ url_for('super_admin.toggle_tenant',
+                                             tenant_id=tenant.id) }}"
+                          onsubmit="return confirm('Change tenant status?')">
+                        <input type="hidden" name="csrf_token"
+                               value="{{ csrf_token() }}">
+                        <button class="btn w-100
+                            {% if tenant.status == 'active' %}btn-danger
+                            {% else %}btn-success{% endif %}">
+                            {% if tenant.status == 'active' %}
+                                <i class="bi bi-pause-circle me-1"></i>
+                                Suspend Tenant
+                            {% else %}
+                                <i class="bi bi-play-circle me-1"></i>
+                                Activate Tenant
+                            {% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Tenant Statistics</h6>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Total Events</span>
+                        <strong>{{ tenant_events|length }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Total Registrations</span>
+                        <strong>{{ total_regs }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Total Organizers</span>
+                        <strong>{{ organizers|length }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Total Revenue</span>
+                        <strong class="text-success">
+                            ₹{{ "{:,.0f}".format(total_revenue) }}
+                        </strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Events & Organizers -->
+        <div class="col-md-8">
+
+            <!-- Organizers -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0">
+                    <h6 class="fw-bold mb-0">
+                        <i class="bi bi-person-badge me-2"></i>Organizers
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if organizers %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for o in organizers %}
+                                <tr>
+                                    <td>{{ o.name }}</td>
+                                    <td>{{ o.email }}</td>
+                                    <td>
+                                        <span class="badge
+                                            {% if o.status == 'active' or o.is_active %}
+                                                bg-success
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ o.get('status', 'active') | title }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-3 mb-0">
+                        No organizers linked to this tenant yet.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Events -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0">
+                    <h6 class="fw-bold mb-0">
+                        <i class="bi bi-calendar-event me-2"></i>Events
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if tenant_events %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Event Name</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for e in tenant_events %}
+                                <tr>
+                                    <td class="fw-semibold">{{ e.name }}</td>
+                                    <td>{{ e.start_date }}</td>
+                                    <td>
+                                        <span class="badge
+                                            {% if e.status == 'published' %}bg-success
+                                            {% elif e.status == 'draft' %}bg-secondary
+                                            {% elif e.status == 'cancelled' %}bg-danger
+                                            {% else %}bg-primary{% endif %}">
+                                            {{ e.status | title }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-3 mb-0">
+                        No events found for this tenant.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

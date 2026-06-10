@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Platform Analytics — Super Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-graph-up-arrow me-2 text-danger"></i>
+                Platform Analytics
+            </h3>
+            <p class="text-muted mb-0">Revenue and activity across all tenants</p>
+        </div>
+        <a href="{{ url_for('super_admin.dashboard') }}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+    </div>
+
+    <!-- Platform Summary -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4
+                        border-start border-success border-4">
+                <h6 class="text-muted">Total Platform Revenue</h6>
+                <h2 class="fw-bold text-success mb-0">
+                    ₹{{ "{:,.0f}".format(platform_revenue) }}
+                </h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4
+                        border-start border-primary border-4">
+                <h6 class="text-muted">Total Events</h6>
+                <h2 class="fw-bold text-primary mb-0">{{ platform_events }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4
+                        border-start border-warning border-4">
+                <h6 class="text-muted">Total Registrations</h6>
+                <h2 class="fw-bold text-warning mb-0">{{ platform_regs }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue Chart -->
+    {% if tenant_stats %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3">Revenue by Tenant</h5>
+            <canvas id="revenueChart" height="100"></canvas>
+        </div>
+    </div>
+
+    <!-- Events Chart -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3">Events by Tenant</h5>
+            <canvas id="eventsChart" height="100"></canvas>
+        </div>
+    </div>
+
+    <!-- Tenant Breakdown Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0">
+            <h5 class="fw-bold mb-0">Tenant Breakdown</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Status</th>
+                            <th>Events</th>
+                            <th>Registrations</th>
+                            <th>Revenue</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tenant_stats %}
+                        <tr>
+                            <td class="fw-semibold">{{ t.name }}</td>
+                            <td>
+                                <span class="badge
+                                    {% if t.status == 'active' %}bg-success
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ t.status | title }}
+                                </span>
+                            </td>
+                            <td>{{ t.events }}</td>
+                            <td>{{ t.regs }}</td>
+                            <td class="fw-bold text-success">
+                                ₹{{ "{:,.0f}".format(t.revenue) }}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('super_admin.tenant_detail',
+                                                    tenant_id=t.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-graph-up fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No tenant data available yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const labels  = {{ chart_labels | tojson }};
+    const revenue = {{ chart_revenue | tojson }};
+    const events  = {{ chart_events | tojson }};
+
+    // Revenue Chart
+    new Chart(document.getElementById('revenueChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Revenue (₹)',
+                data: revenue,
+                backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    // Events Chart
+    new Chart(document.getElementById('eventsChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Number of Events',
+                data: events,
+                backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+</script>
+{% endblock %}

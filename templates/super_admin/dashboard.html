@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}Super Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-shield-fill-check me-2 text-danger"></i>
+                Super Admin Dashboard
+            </h3>
+            <p class="text-muted mb-0">Platform Overview — All Tenants</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('super_admin.list_tenants') }}"
+            class="btn btn-danger">
+            <i class="bi bi-building me-1"></i>Tenants
+        </a>
+        <a href="{{ url_for('super_admin.analytics') }}"
+        class="btn btn-outline-success">
+        <i class="bi bi-graph-up-arrow me-1"></i>Analytics
+    </a>
+    <a href="{{ url_for('super_admin.all_organizers') }}"
+       class="btn btn-outline-primary">
+        <i class="bi bi-person-badge me-1"></i>Organizers
+    </a>
+    <a href="{{ url_for('super_admin.all_users') }}"
+       class="btn btn-outline-danger">
+        <i class="bi bi-people me-1"></i>All Users
+    </a>
+</div>
+    </div>
+
+    <!-- Platform Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-danger border-4">
+                <h6 class="text-muted small">Total Tenants</h6>
+                <h2 class="fw-bold text-danger mb-0">{{ total_tenants }}</h2>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-success border-4">
+                <h6 class="text-muted small">Active Tenants</h6>
+                <h2 class="fw-bold text-success mb-0">{{ active_tenants }}</h2>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-primary border-4">
+                <h6 class="text-muted small">Total Users</h6>
+                <h2 class="fw-bold text-primary mb-0">{{ total_users }}</h2>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-warning border-4">
+                <h6 class="text-muted small">Total Events</h6>
+                <h2 class="fw-bold text-warning mb-0">{{ total_events }}</h2>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-info border-4">
+                <h6 class="text-muted small">Registrations</h6>
+                <h2 class="fw-bold text-info mb-0">{{ total_registrations }}</h2>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm text-center p-3 border-start border-success border-4">
+                <h6 class="text-muted small">Platform Revenue</h6>
+                <h3 class="fw-bold text-success mb-0">
+                    ₹{{ "{:,.0f}".format(total_revenue) }}
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tenant Quick Overview -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 py-3">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-building me-2"></i>Registered Tenants
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            {% if tenants %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Company</th>
+                            <th>Contact</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tenants %}
+                        <tr>
+                            <td class="fw-semibold">{{ t.company_name }}</td>
+                            <td>{{ t.contact_person }}</td>
+                            <td>{{ t.contact_email }}</td>
+                            <td>
+                                <span class="badge
+                                    {% if t.status == 'active' %}bg-success
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ t.status | title }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('super_admin.tenant_detail', tenant_id=t.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-building fs-1 text-muted"></i>
+                <p class="text-muted mt-2">No tenants registered yet.</p>
+                <a href="{{ url_for('super_admin.list_tenants') }}"
+                   class="btn btn-danger">Add First Tenant</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

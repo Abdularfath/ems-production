@@ -128,6 +128,8 @@ def login():
                 return redirect(url_for('admin.dashboard'))
             if role == 'sponsor':
                 return redirect(url_for('sponsor_portal.dashboard'))
+            if role == 'super_admin':
+                return redirect(url_for('super_admin.dashboard'))
             return redirect(url_for('attendee.my_events'))
  
         except Exception as e:

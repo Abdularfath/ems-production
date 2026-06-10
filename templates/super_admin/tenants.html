@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}Tenant Management{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-building me-2 text-danger"></i>Tenant Management
+            </h3>
+            <p class="text-muted mb-0">All companies using the EMS platform</p>
+        </div>
+        <a href="{{ url_for('super_admin.dashboard') }}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Add Tenant Form -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-plus-circle me-2 text-danger"></i>
+                        Register New Tenant
+                    </h5>
+                    <form method="POST"
+                          action="{{ url_for('super_admin.create_tenant') }}">
+                        <input type="hidden" name="csrf_token"
+                               value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Company Name *
+                            </label>
+                            <input type="text" name="company_name"
+                                   class="form-control"
+                                   placeholder="e.g. Global Zenith Tech"
+                                   required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Contact Person *
+                            </label>
+                            <input type="text" name="contact_person"
+                                   class="form-control"
+                                   placeholder="Full name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Contact Email *
+                            </label>
+                            <input type="email" name="contact_email"
+                                   class="form-control"
+                                   placeholder="admin@company.com" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Phone</label>
+                            <input type="text" name="phone"
+                                   class="form-control"
+                                   placeholder="+91 XXXXX XXXXX">
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-plus-lg me-1"></i>
+                            Register Tenant
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tenant List -->
+        <div class="col-md-8">
+            {% if tenants %}
+            <div class="d-flex flex-column gap-3">
+                {% for t in tenants %}
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between
+                                    align-items-start">
+                            <div>
+                                <h5 class="fw-bold mb-1">
+                                    {{ t.company_name }}
+                                </h5>
+                                <p class="mb-1 small">
+                                    <i class="bi bi-person me-1"></i>
+                                    {{ t.contact_person }}
+                                </p>
+                                <p class="mb-1 small">
+                                    <i class="bi bi-envelope me-1"></i>
+                                    {{ t.contact_email }}
+                                </p>
+                                {% if t.phone %}
+                                <p class="mb-0 small">
+                                    <i class="bi bi-telephone me-1"></i>
+                                    {{ t.phone }}
+                                </p>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-2">
+                                <span class="badge
+                                    {% if t.status == 'active' %}bg-success
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ t.status | title }}
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <a href="{{ url_for('super_admin.tenant_detail',
+                                                        tenant_id=t.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye me-1"></i>View
+                                    </a>
+                                    <form method="POST"
+                                          action="{{ url_for('super_admin.toggle_tenant',
+                                                             tenant_id=t.id) }}"
+                                          onsubmit="return confirm(
+                                              '{{ 'Suspend' if t.status == 'active' else 'Activate' }}
+                                               this tenant?')">
+                                        <input type="hidden" name="csrf_token"
+                                               value="{{ csrf_token() }}">
+                                        <button class="btn btn-sm
+                                            {% if t.status == 'active' %}
+                                                btn-outline-danger
+                                            {% else %}
+                                                btn-outline-success
+                                            {% endif %}">
+                                            {% if t.status == 'active' %}
+                                                <i class="bi bi-pause-circle me-1"></i>Suspend
+                                            {% else %}
+                                                <i class="bi bi-play-circle me-1"></i>Activate
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-building fs-1 text-muted"></i>
+                <p class="text-muted mt-2">No tenants registered yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
