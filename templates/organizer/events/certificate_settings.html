@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Certificate Settings{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:700px">
+  <h4 class="fw-bold mb-4"><i class="bi bi-award me-2 text-primary"></i>Certificate Template — {{ event.name }}</h4>
+
+  <form method="POST" enctype="multipart/form-data" class="ems-card card p-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Logo</label>
+      {% if settings.logo_url %}
+      <div class="mb-2"><img src="{{ settings.logo_url }}" style="height:60px" alt="Current logo"></div>
+      {% endif %}
+      <input type="file" name="logo_file" accept="image/*" class="form-control">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Certificate Body Text</label>
+      <textarea name="body_text" rows="4" class="form-control">{{ settings.body_text or default_body }}</textarea>
+      <div class="form-text">
+        Use <code>{{ '{{attendee_name}}' }}</code>, <code>{{ '{{event_name}}' }}</code>, and
+        <code>{{ '{{event_date}}' }}</code> — these get replaced automatically for each attendee.
+      </div>
+    </div>
+
+    <hr class="my-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <label class="form-label fw-semibold mb-0">Signatures</label>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSignatureBlock()">
+        <i class="bi bi-plus-circle me-1"></i>Add Signature
+      </button>
+    </div>
+
+    <div id="signatureBlocks">
+      {% for sig in settings.signatures or [] %}
+      <div class="signature-block border rounded-3 p-3 mb-3">
+        <div class="d-flex justify-content-between mb-2">
+          <strong class="small text-muted">Signature {{ loop.index }}</strong>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.signature-block').remove()">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+        <input type="hidden" name="existing_signature_url_{{ loop.index0 }}" value="{{ sig.signature_url or '' }}">
+        {% if sig.signature_url %}
+        <div class="mb-2"><img src="{{ sig.signature_url }}" style="height:40px" alt="Current signature"></div>
+        {% endif %}
+        <div class="mb-2">
+          <label class="form-label small">Signature Image</label>
+          <input type="file" name="signature_file_{{ loop.index0 }}" accept="image/*" class="form-control form-control-sm">
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small">Signer Name</label>
+            <input type="text" name="signer_name_{{ loop.index0 }}" class="form-control form-control-sm"
+                   value="{{ sig.signer_name or '' }}" placeholder="e.g. Abdul Arfath">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Signer Title</label>
+            <input type="text" name="signer_title_{{ loop.index0 }}" class="form-control form-control-sm"
+                   value="{{ sig.signer_title or '' }}" placeholder="e.g. Event Organizer">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100 mt-3">Save Certificate Template</button>
+  </form>
+
+  <a href="{{ url_for('events.certificate_settings_preview', event_id=event_id) }}" target="_blank"
+     class="btn btn-outline-secondary w-100 mt-2">
+    <i class="bi bi-eye me-1"></i>Preview Sample Certificate
+  </a>
+</div>
+
+<template id="signatureBlockTemplate">
+  <div class="signature-block border rounded-3 p-3 mb-3">
+    <div class="d-flex justify-content-between mb-2">
+      <strong class="small text-muted">New Signature</strong>
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.signature-block').remove()">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+    <input type="hidden" class="existing-url-input" value="">
+    <div class="mb-2">
+      <label class="form-label small">Signature Image</label>
+      <input type="file" class="sig-file-input form-control form-control-sm" accept="image/*">
+    </div>
+    <div class="row g-2">
+      <div class="col-6">
+        <label class="form-label small">Signer Name</label>
+        <input type="text" class="signer-name-input form-control form-control-sm" placeholder="e.g. Abdul Arfath">
+      </div>
+      <div class="col-6">
+        <label class="form-label small">Signer Title</label>
+        <input type="text" class="signer-title-input form-control form-control-sm" placeholder="e.g. Event Organizer">
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  function addSignatureBlock() {
+    const container = document.getElementById('signatureBlocks');
+    const tpl = document.getElementById('signatureBlockTemplate').content.cloneNode(true);
+    container.appendChild(tpl);
+  }
+
+  // Reindex every remaining block right before submit, so removing a middle
+  // block (e.g. #1 of 0,1,2) doesn't leave a gap the server-side loop would stop at.
+  document.querySelector('form').addEventListener('submit', function () {
+    document.querySelectorAll('#signatureBlocks .signature-block').forEach((block, i) => {
+      const hidden = block.querySelector('input[type=hidden]');
+      if (hidden) hidden.name = `existing_signature_url_${i}`;
+      const fileInput = block.querySelector('input[type=file]');
+      if (fileInput) fileInput.name = `signature_file_${i}`;
+      const textInputs = block.querySelectorAll('input[type=text]');
+      if (textInputs[0]) textInputs[0].name = `signer_name_${i}`;
+      if (textInputs[1]) textInputs[1].name = `signer_title_${i}`;
+    });
+  });
+</script>
+{% endblock %}

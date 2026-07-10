@@ -27,7 +27,7 @@
     <div class="container">
       {# Brand / Logo #}
       <a class="navbar-brand" href="{{ url_for('public.index') }}">
-        <i class="bi bi-calendar-event me-2"></i><span class="d-none d-md-inline">Unified Event Lifecycle Management System</span><span class="d-inline d-md-none">ULEMS</span>
+       <i class="bi bi-calendar-event me-2"></i><span class="d-none d-md-inline">Unified Event Lifecycle Management System</span><span class="d-inline d-md-none">ULEMS</span>
       </a>
  
       {# Mobile hamburger button #}
@@ -58,8 +58,18 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('public.index') }}">
+                  <i class="bi bi-globe me-1"></i>Public View
+                </a>
+              </li>
+              <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('speakers.list_speakers') }}">
                   <i class="bi bi-mic me-1"></i>Speakers
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('organizer.platform_feedback') }}">
+                  <i class="bi bi-chat-square-heart me-1"></i>Feedback
                 </a>
               </li>
             {% endif %}
@@ -77,8 +87,34 @@
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('attendee.my_events') }}">
                 <i class="bi bi-ticket-perforated me-1"></i>My Tickets
-              </a></li>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('attendee.my_certificates') }}">
+                <i class="bi bi-award me-1"></i>My Certificates
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('public.index') }}">
+                <i class="bi bi-search me-1"></i>Browse Events
+              </a>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link position-relative" href="#" id="notifBell"
+                 data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-bell fs-5"></i>
+                <span id="notifBadge" class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle d-none"
+                      style="font-size:0.6rem;">0</span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end p-0" style="width:320px; max-height:400px; overflow-y:auto;"
+                  aria-labelledby="notifBell">
+                <li><h6 class="dropdown-header">Notifications</h6></li>
+                <li id="notifEmpty" class="px-3 py-3 text-muted small text-center">No notifications yet</li>
+                <li id="notifList"></li>
+              </ul>
+            </li>
             {% endif %}
+
             {% if session.get('role') == 'sponsor' %}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('sponsor_portal.dashboard') }}">
@@ -176,6 +212,71 @@
         }, 4000); // 4000 milliseconds = 4 seconds
     });
 </script>
- 
+
+{% if session.get('role') == 'attendee' %}
+<script>
+  const notifBell   = document.getElementById('notifBell');
+  const notifBadge  = document.getElementById('notifBadge');
+  const notifList   = document.getElementById('notifList');
+  const notifEmpty  = document.getElementById('notifEmpty');
+  let notifMarkedThisSession = false;
+
+  const notifIcons = {
+    'certificate_ready':  'bi-award text-success',
+    'event_update':       'bi-exclamation-triangle text-warning',
+    'event_cancelled':    'bi-x-circle text-danger',
+    'waitlist_promoted':  'bi-check-circle text-primary',
+    'info':                'bi-info-circle text-secondary',
+  };
+
+  async function loadNotifications() {
+    try {
+      const res = await fetch('/attendee/notifications');
+      const data = await res.json();
+
+      if (data.unread_count > 0) {
+        notifBadge.textContent = data.unread_count;
+        notifBadge.classList.remove('d-none');
+      } else {
+        notifBadge.classList.add('d-none');
+      }
+
+      if (!data.notifications.length) {
+        notifEmpty.classList.remove('d-none');
+        notifList.innerHTML = '';
+        return;
+      }
+
+      notifEmpty.classList.add('d-none');
+      notifList.innerHTML = data.notifications.map(n => `
+        <div class="px-3 py-2 border-bottom ${n.read ? '' : 'bg-light'}">
+          <div class="d-flex align-items-start gap-2">
+            <i class="bi ${notifIcons[n.type] || notifIcons.info} mt-1"></i>
+            <div>
+              <div class="fw-semibold small">${n.title}</div>
+              <div class="text-muted small">${n.message}</div>
+              <div class="text-muted" style="font-size:0.7rem;">${n.created_at}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadNotifications);
+
+  notifBell.addEventListener('click', async function () {
+    if (notifMarkedThisSession) return;
+    notifMarkedThisSession = true;
+    await fetch('/attendee/notifications/mark-all-read', { method: 'POST' });
+    setTimeout(() => {
+      notifBadge.classList.add('d-none');
+    }, 800);
+  });
+</script>
+{% endif %}
+
 </body>
 </html>

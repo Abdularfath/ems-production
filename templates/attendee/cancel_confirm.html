@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Cancel Registration{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:550px">
+  <h4 class="fw-bold mb-4"><i class="bi bi-x-circle text-danger me-2"></i>Cancel Registration</h4>
+
+  <div class="ems-card card p-4 mb-4">
+    <h6 class="fw-bold">{{ event.name }}</h6>
+    <p class="text-muted small mb-3">{{ registration.ticket_type_name }} × {{ registration.quantity }}</p>
+
+    <div class="alert {% if refund_amount > 0 %}alert-info{% else %}alert-warning{% endif %}">
+      {% if refund_amount > 0 %}
+        You are eligible for a <strong>{{ refund_percent }}% refund</strong> of
+        <strong>₹{{ refund_amount }}</strong>, based on how close we are to the event date.
+      {% else %}
+        Based on the event's refund policy, this cancellation is <strong>not eligible for a refund</strong>.
+      {% endif %}
+    </div>
+
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button type="submit" class="btn btn-danger w-100">
+        Confirm Cancellation
+      </button>
+      <a href="{{ url_for('attendee.my_events') }}" class="btn btn-outline-secondary w-100 mt-2">
+        Go Back
+      </a>
+    </form>
+  </div>
+</div>
+{% endblock %}

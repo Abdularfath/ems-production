@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Order Summary{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:600px">
+  <h4 class="fw-bold mb-4"><i class="bi bi-receipt me-2 text-primary"></i>Order Summary</h4>
+
+  <div class="ems-card card p-4 mb-4">
+    <h6 class="fw-bold mb-3">{{ event.name }}</h6>
+
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr class="text-muted small">
+          <th>Ticket</th>
+          <th class="text-center">Qty</th>
+          <th class="text-end">Price</th>
+          <th class="text-end">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order['items'] %}
+        <tr>
+          <td>{{ item.ticket_type_name }}</td>
+          <td class="text-center">{{ item.quantity }}</td>
+          <td class="text-end">₹{{ item.unit_price }}</td>
+          <td class="text-end">₹{{ item.line_subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr>
+
+    <div class="d-flex justify-content-between small">
+      <span>Subtotal</span><span>₹{{ order.subtotal }}</span>
+    </div>
+    {% if order.discount_amount %}
+    <div class="d-flex justify-content-between small text-success">
+      <span>Discount {% if order.promo_code_used %}({{ order.promo_code_used }}){% endif %}</span>
+      <span>−₹{{ order.discount_amount }}</span>
+    </div>
+    {% endif %}
+    <div class="d-flex justify-content-between fw-bold fs-5 mt-2">
+      <span>Total</span><span class="text-primary">₹{{ order.total_amount }}</span>
+    </div>
+  </div>
+
+  <button id="payBtn" class="btn btn-primary w-100 py-2">
+    <i class="bi bi-credit-card me-1"></i>Pay ₹{{ order.total_amount }} with Razorpay
+  </button>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  document.getElementById('payBtn').addEventListener('click', async function () {
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    try {
+      const orderResp = await fetch(`/attendee/payment/{{ order_id }}/create-order`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+      });
+      const orderData = await orderResp.json();
+
+      if (!orderData.success) {
+        alert('Could not start payment: ' + orderData.error);
+        btn.disabled = false;
+        btn.textContent = 'Try Again';
+        return;
+      }
+
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.order_id,
+        name: 'Unified Event Lifecycle Management System',
+        description: '{{ event.name }}',
+        prefill: { email: orderData.email },
+        handler: async function (response) {
+          const captureResp = await fetch(`/attendee/payment/{{ order_id }}/capture`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            })
+          });
+          const captureData = await captureResp.json();
+
+          if (captureData.success) {
+            window.location.href = `/attendee/payment/success/{{ order_id }}`;
+          } else {
+            window.location.href = `/attendee/payment/failed/{{ order_id }}`;
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            btn.disabled = false;
+            btn.textContent = 'Pay ₹{{ order.total_amount }} with Razorpay';
+          }
+        },
+        theme: { color: '#0d6efd' }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      alert('Something went wrong starting payment.');
+      btn.disabled = false;
+      btn.textContent = 'Try Again';
+    }
+  });
+</script>
+{% endblock %}

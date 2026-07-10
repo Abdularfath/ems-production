@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Platform Feedback{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:550px">
+  <h4 class="fw-bold mb-4"><i class="bi bi-chat-square-heart me-2 text-primary"></i>How's EMS working for you?</h4>
+
+  <form method="POST" class="ems-card card p-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Overall Rating</label>
+      <select name="rating" class="form-select" required>
+        <option value="5">★★★★★ Excellent</option>
+        <option value="4">★★★★☆ Good</option>
+        <option value="3" selected>★★★☆☆ Okay</option>
+        <option value="2">★★☆☆☆ Needs work</option>
+        <option value="1">★☆☆☆☆ Poor</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Comments</label>
+      <textarea name="comments" rows="4" class="form-control"
+                placeholder="What's working well? What could be better?"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">Submit Feedback</button>
+  </form>
+</div>
+{% endblock %}

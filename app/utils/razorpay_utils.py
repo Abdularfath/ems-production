@@ -122,3 +122,30 @@ def get_payment_details(payment_id):
             'success': False,
             'error': str(e)
         }
+    
+def create_refund(payment_id, amount_in_paise=None, notes=None):
+    """
+    Issue a refund for a captured Razorpay payment.
+    Pass amount_in_paise=None for a FULL refund; pass a value for a partial refund.
+    """
+    try:
+        data = {}
+        if amount_in_paise is not None:
+            data['amount'] = amount_in_paise
+        if notes:
+            data['notes'] = notes
+
+        refund = client.payment.refund(payment_id, data)
+        return {
+            'success':   True,
+            'refund_id': refund['id'],
+            'amount':    refund['amount'],
+            'status':    refund['status'],
+        }
+    except Exception as e:
+        print(f"Razorpay refund error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+        

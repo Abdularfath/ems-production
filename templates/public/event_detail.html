@@ -20,7 +20,15 @@
       {% endif %}
  
       {# Event title and meta #}
-      <h2 class="fw-bold">{{ event.name }}</h2>
+      <h2 class="fw-bold">
+        {{ event.name }}
+        {% if avg_rating %}
+        <span class="fs-6 fw-normal text-warning ms-2">
+          <i class="bi bi-star-fill"></i> {{ avg_rating }}
+          <span class="text-muted">({{ review_count }} review{{ 's' if review_count != 1 else '' }})</span>
+        </span>
+        {% endif %}
+      </h2>
       <div class="d-flex flex-wrap gap-3 text-muted mb-4">
         <span><i class="bi bi-calendar3 me-1"></i>
           {% if event.start_datetime %}
@@ -149,7 +157,7 @@
                         {% else %}bg-primary{% endif %} mb-2">
                         {{ sponsor.tier }} Sponsor
                     </span>
-                    {% if session.get('role') == 'attendee' %}
+                    {% if session.get('role') == 'attendee' and not event_is_over %}
                     <form method="POST"
                           action="{{ url_for('attendee.connect_sponsor',
                                             event_id=event.id,
@@ -234,7 +242,7 @@
                             </p>
                             {% endif %}
 
-                            {% if session.get('role') == 'attendee' %}
+                            {% if session.get('role') == 'attendee' and not event_is_over %}
                             <form method="POST"
                                   action="{{ url_for('attendee.connect_sponsor',
                                                     event_id=event.id,
@@ -261,122 +269,211 @@
     </div> <!-- ✅ THIS CLOSES THE LEFT COLUMN CORRECTLY ✅ -->
  
     {# ── RIGHT COLUMN — ticket selection ────────────── #}
-    <div class="col-lg-5">
-      <div class="ems-card card p-4 sticky-top" style="top:80px">
-        <h5 class="fw-bold mb-3">
-          <i class="bi bi-ticket-perforated me-2 text-primary"></i>Ticket Types
-        </h5>
- 
-        {# No tickets available #}
-        {% if not ticket_types %}
-        <p class="text-muted">No tickets available yet.</p>
-        {% else %}
- 
-        {# Ticket type cards #}
-        {% for tt in ticket_types %}
-        <div class="ems-ticket-card mb-3 p-3 border rounded-3 {{ 'opacity-50' if tt.sold_out }}">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <h6 class="fw-bold mb-1">{{ tt.name }}</h6>
-              {% if tt.description %}
-              <p class="text-muted small mb-1">{{ tt.description }}</p>
-              {% endif %}
-              <p class="text-muted small mb-0">
-                {% if tt.sold_out %}
-                  <span class="text-danger fw-semibold">Sold Out</span>
-                {% else %}
-                  {{ tt.available }} tickets left
-                  &nbsp;|&nbsp; Max {{ tt.max_per_order }} per person
-                {% endif %}
-              </p>
-            </div>
-            <div class="text-end ms-3">
-              <div class="fs-5 fw-bold text-primary">
-                {% if tt.price == 0 %}Free{% else %}₹{{ tt.price }}{% endif %}
-              </div>
+<!--
+  ============================================================
+  DROP-IN REPLACEMENT for the RIGHT COLUMN of event_detail.html
+  (everything from the opening <div class="col-lg-5"> down to its
+  closing comment "THIS CLOSES THE RIGHT COLUMN"). Everything else
+  in your file — cover image, agenda, sponsors, exhibitors — is
+  unchanged, leave it exactly as it is.
+  ============================================================
+-->
+<div class="col-lg-5">
+  <div class="ems-card card p-4 sticky-top" style="top:80px">
+    <h5 class="fw-bold mb-3">
+      <i class="bi bi-ticket-perforated me-2 text-primary"></i>Ticket Types
+    </h5>
+
+   {% if event_is_over %}
+    <div class="alert alert-secondary text-center mb-0">
+      <i class="bi bi-calendar-x fs-3 d-block mb-2"></i>
+      <strong>This event has ended.</strong>
+      <p class="small mb-0 mt-1">Registration and ticket purchases are closed.</p>
+    </div>
+    {% elif not ticket_types %}
+    <p class="text-muted">No tickets available yet.</p>
+    {% else %}
+
+    {% set available_tickets = ticket_types | rejectattr('sold_out') | list %}
+    {% set soldout_tickets   = ticket_types | selectattr('sold_out') | list %}
+
+    {% if available_tickets and session.get('uid') %}
+    <!-- ── CART FORM: pick quantities across multiple ticket types ── -->
+    <form method="POST"
+          action="{{ url_for('registration.cart_checkout', event_id=event.id) }}"
+          id="cartForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      {% for tt in available_tickets %}
+      <div class="ems-ticket-card mb-3 p-3 border rounded-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h6 class="fw-bold mb-1">{{ tt.name }}</h6>
+            {% if tt.description %}
+            <p class="text-muted small mb-1">{{ tt.description }}</p>
+            {% endif %}
+            <p class="text-muted small mb-0">
+              {{ tt.available }} tickets left
+              &nbsp;|&nbsp; Max {{ tt.max_per_order }} per person
+            </p>
+          </div>
+          <div class="text-end ms-3">
+            <div class="fs-5 fw-bold text-primary">
+              {% if tt.price == 0 %}Free{% else %}₹{{ tt.price }}{% endif %}
             </div>
           </div>
- 
-                    {# Select or Waitlist button #}
-          {% if not tt.sold_out %}
-              <!-- Available Tickets -->
-              {% if session.get('uid') %}
-              <a href="{{ url_for('registration.register', event_id=event.id, ticket_type_id=tt.id) }}" class="btn btn-outline-primary btn-sm mt-2 w-100">
-                 <i class="bi bi-check-circle me-1"></i>Select & Register
-              </a>
-              {% else %}
-              <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm mt-2 w-100">
-                Login to Register
-              </a>
-              {% endif %}
-          {% else %}
-              <!-- Sold Out Tickets -> Show Waitlist -->
-              {% if session.get('uid') %}
-              <form action="{{ url_for('attendee.join_waitlist', event_id=event.id, ticket_type_id=tt.id) }}" method="POST" class="mt-2">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                  <button type="submit" class="btn btn-outline-warning btn-sm w-100">
-                      <i class="bi bi-person-lines-fill me-1"></i>Join Waitlist
-                  </button>
-              </form>
-              {% else %}
-              <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm mt-2 w-100">
-                Login to Join Waitlist
-              </a>
-              {% endif %}
-          {% endif %}
         </div>
-        {% endfor %}
- 
-        {# Promo code input #}
-        <hr class="my-3">
-        <label class="form-label small fw-semibold">Have a promo code?</label>
-        <div class="input-group input-group-sm">
-          <input type="text" id="promoInput" class="form-control text-uppercase"
-                 placeholder="Enter code">
-          <button class="btn btn-outline-secondary" type="button"
-                  onclick="applyPromo()">Apply</button>
+
+        <!-- Quantity stepper -->
+        <div class="d-flex align-items-center justify-content-between mt-2">
+          <label class="form-label small fw-semibold mb-0">Quantity</label>
+          <div class="input-group input-group-sm" style="width:130px">
+            <button class="btn btn-outline-secondary" type="button"
+                    onclick="stepQty('{{ tt.id }}', -1)">−</button>
+            <input type="number"
+                   class="form-control text-center qty-input"
+                   id="qty_{{ tt.id }}"
+                   name="qty_{{ tt.id }}"
+                   data-price="{{ tt.price }}"
+                   value="0" min="0"
+                   max="{{ [tt.max_per_order, tt.available] | min }}"
+                   oninput="recalcTotal()">
+            <button class="btn btn-outline-secondary" type="button"
+                    onclick="stepQty('{{ tt.id }}', 1)">+</button>
+          </div>
         </div>
-        <div id="promoMsg" class="form-text mt-1"></div>
- 
-        {% endif %}
       </div>
-    </div> <!-- ✅ THIS CLOSES THE RIGHT COLUMN ✅ -->
-  </div> <!-- ✅ THIS CLOSES THE ROW ✅ -->
-</div> <!-- ✅ THIS CLOSES THE CONTAINER ✅ -->
- 
+      {% endfor %}
+
+      <!-- Promo code input -->
+      <hr class="my-3">
+      <label class="form-label small fw-semibold">Have a promo code?</label>
+      <div class="input-group input-group-sm mb-1">
+        <input type="text" id="promoInput" name="promo_code"
+               class="form-control text-uppercase" placeholder="Enter code">
+        <button class="btn btn-outline-secondary" type="button"
+                onclick="applyPromo()">Apply</button>
+      </div>
+      <div id="promoMsg" class="form-text mt-1 mb-3"></div>
+
+      <!-- Live total -->
+      <div class="d-flex justify-content-between align-items-center border-top pt-3 mb-3">
+        <span class="fw-semibold">Total</span>
+        <span class="fs-5 fw-bold text-primary" id="cartTotal">₹0.00</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100" id="checkoutBtn" disabled>
+        <i class="bi bi-cart-check me-1"></i>Proceed to Checkout
+      </button>
+    </form>
+    {% elif available_tickets %}
+    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm w-100 mb-3">
+      Login to Register
+    </a>
+    {% endif %}
+
+    <!-- ── SOLD OUT ticket types keep their own waitlist forms ── -->
+    {% for tt in soldout_tickets %}
+    <div class="ems-ticket-card mb-3 p-3 border rounded-3 opacity-50">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h6 class="fw-bold mb-1">{{ tt.name }}</h6>
+          {% if tt.description %}
+          <p class="text-muted small mb-1">{{ tt.description }}</p>
+          {% endif %}
+          <p class="text-muted small mb-0">
+            <span class="text-danger fw-semibold">Sold Out</span>
+          </p>
+        </div>
+        <div class="text-end ms-3">
+          <div class="fs-5 fw-bold text-primary">
+            {% if tt.price == 0 %}Free{% else %}₹{{ tt.price }}{% endif %}
+          </div>
+        </div>
+      </div>
+      {% if session.get('uid') %}
+      <form action="{{ url_for('attendee.join_waitlist', event_id=event.id, ticket_type_id=tt.id) }}" method="POST" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-outline-warning btn-sm w-100">
+          <i class="bi bi-person-lines-fill me-1"></i>Join Waitlist
+        </button>
+      </form>
+      {% else %}
+      <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm mt-2 w-100">
+        Login to Join Waitlist
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% endif %}
+  </div>
+</div>
+<!-- THIS CLOSES THE RIGHT COLUMN -->
+
 {% block extra_js %}
 <script>
+  function stepQty(ticketId, delta) {
+    const input = document.getElementById('qty_' + ticketId);
+    let val = parseInt(input.value || '0', 10) + delta;
+    val = Math.max(0, Math.min(val, parseInt(input.max || '0', 10)));
+    input.value = val;
+    recalcTotal();
+  }
+
+  function recalcTotal() {
+    let total = 0;
+    document.querySelectorAll('.qty-input').forEach(inp => {
+      const qty = parseInt(inp.value || '0', 10);
+      const price = parseFloat(inp.dataset.price || '0');
+      total += qty * price;
+    });
+    document.getElementById('cartTotal').textContent = '₹' + total.toFixed(2);
+    document.getElementById('checkoutBtn').disabled = total === 0 &&
+      ![...document.querySelectorAll('.qty-input')].some(i => parseInt(i.value || '0', 10) > 0);
+  }
+
   async function applyPromo() {
     const code = document.getElementById('promoInput').value.trim().toUpperCase();
     const msg  = document.getElementById('promoMsg');
     const eventId = '{{ event.id }}';
 
-    if (!code) { 
-        msg.textContent = 'Please enter a promo code.'; 
-        msg.className = 'form-text text-danger mt-1'; 
-        return; 
+    if (!code) {
+      msg.textContent = 'Please enter a promo code.';
+      msg.className = 'form-text text-danger mt-1';
+      return;
     }
+
+    let subtotal = 0;
+    document.querySelectorAll('.qty-input').forEach(inp => {
+      subtotal += parseInt(inp.value || '0', 10) * parseFloat(inp.dataset.price || '0');
+    });
 
     msg.textContent = 'Validating...';
     msg.className = 'form-text text-muted mt-1';
 
     try {
-        // Call the new API we just built!
-        const response = await fetch(`/api/events/${eventId}/validate_promo/${code}`);
-        const data = await response.json();
+      const response = await fetch(`/attendee/registration/validate-promo`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({event_id: eventId, code: code, subtotal: subtotal})
+      });
+      const data = await response.json();
 
-        if (data.valid) {
-            msg.textContent = data.message;
-            msg.className = 'form-text text-success fw-bold mt-1';
-        } else {
-            msg.textContent = data.message;
-            msg.className = 'form-text text-danger mt-1';
-        }
-    } catch (err) {
-        msg.textContent = 'Error communicating with server.';
+      if (data.valid) {
+        msg.textContent = data.message;
+        msg.className = 'form-text text-success fw-bold mt-1';
+      } else {
+        msg.textContent = data.message;
         msg.className = 'form-text text-danger mt-1';
+      }
+    } catch (err) {
+      msg.textContent = 'Error communicating with server.';
+      msg.className = 'form-text text-danger mt-1';
     }
   }
+
+  document.addEventListener('DOMContentLoaded', recalcTotal);
 </script>
 {% endblock %}
 {% endblock %}

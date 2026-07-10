@@ -3,7 +3,7 @@ from flask import (Blueprint, render_template, redirect,
 from app.firebase_config import db
 from app.decorators import login_required, role_required
 from app.utils.validators import validate_event
-from datetime import datetime
+from datetime import datetime, timezone
 from google.cloud.firestore import SERVER_TIMESTAMP
 import csv
 from io import StringIO
@@ -15,10 +15,159 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib import colors
 from google.cloud.firestore import Query
+import requests
+import secrets
+import cloudinary.uploader
+from reportlab.lib.utils import ImageReader
+import textwrap
+from flask import abort
+from app.utils.email_utils import send_ticket_email, send_email_with_attachment
+from app.utils.notification_utils import create_notification
+from app.utils.razorpay_utils import create_refund
+from app.utils.event_utils import is_event_over
  
 events_bp = Blueprint('events', __name__, url_prefix='/organizer/events')
  
 FMT = '%Y-%m-%dT%H:%M'  # datetime-local HTML input format
+
+DEFAULT_REFUND_POLICY = {
+    'full_refund_days': 7,
+    'partial_refund_days': 3,
+    'partial_refund_percent': 50,
+}
+
+DEFAULT_CERT_BODY = ("This is to certify that {{attendee_name}} has successfully "
+                      "attended {{event_name}} held on {{event_date}}.")
+
+CRITICAL_FIELDS = ['start_datetime', 'end_datetime', 'venue_id']
+
+
+def notify_event_change(event_id, event_name, changes):
+    """changes: dict of field -> (old_value, new_value). Emails + notifies every
+    confirmed/checked-in attendee, and writes an audit log entry per field."""
+    regs = (db.collection('registrations')
+            .where('event_id', '==', event_id)
+            .where('status', 'in', ['confirmed', 'checked_in']).stream())
+
+    change_lines = ''.join(
+        f"<li><strong>{f.replace('_', ' ').title()}:</strong> {o} &rarr; {n}</li>"
+        for f, (o, n) in changes.items()
+    )
+
+    for r in regs:
+        reg = r.to_dict()
+        create_notification(
+            reg['attendee_uid'], f"{event_name} has been updated",
+            f"Details changed: {', '.join(changes.keys())}. Please check the new event page.",
+            event_id=event_id, notif_type='event_update'
+        )
+        try:
+            send_ticket_email(
+                to_email=reg.get('attendee_email'),
+                subject=f"Important update: {event_name}",
+                html_content=f"""
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+                        <h2 style="color:#dc3545;">Event Details Have Changed</h2>
+                        <p>Hi {reg.get('attendee_name', 'Attendee')},</p>
+                        <p>The organizer of <strong>{event_name}</strong> has made the following
+                           change(s) to an event you're registered for:</p>
+                        <ul>{change_lines}</ul>
+                        <p>Please review your registration and make sure the new details still work for you.</p>
+                    </div>
+                """
+            )
+        except Exception as e:
+            print(f"[ERROR] Change notification email failed for {reg.get('attendee_email')}: {e}")
+
+    for field, (old_val, new_val) in changes.items():
+        db.collection('events').document(event_id).collection('change_log').add({
+            'field':      field,
+            'old_value':  str(old_val),
+            'new_value':  str(new_val),
+            'changed_at': SERVER_TIMESTAMP,
+            'changed_by': session.get('uid'),
+        })
+
+
+def notify_event_cancelled_and_refund(event_id, event_name):
+    """Cancels every confirmed/checked-in registration, auto-refunds paid ones in full,
+    and emails everyone affected."""
+    regs = (db.collection('registrations')
+            .where('event_id', '==', event_id)
+            .where('status', 'in', ['confirmed', 'checked_in']).stream())
+
+    for r in regs:
+        reg = r.to_dict()
+        reg_id = r.id
+        refund_amount = reg.get('total_amount', 0)
+        refund_ok = True
+
+        if refund_amount > 0 and reg.get('razorpay_payment_id'):
+            refund_result = create_refund(reg['razorpay_payment_id'])  # no amount = full refund
+            refund_ok = refund_result.get('success', False)
+            if not refund_ok:
+                print(f"[ERROR] Auto-refund failed for reg {reg_id}: {refund_result.get('error')}")
+
+        db.collection('registrations').document(reg_id).update({
+            'status':        'cancelled',
+            'cancelled_at':  SERVER_TIMESTAMP,
+            'refund_amount': refund_amount if refund_ok else 0,
+            'refund_status': 'processing' if (refund_amount > 0 and refund_ok) else 'not_applicable',
+        })
+
+        create_notification(
+            reg['attendee_uid'], f"{event_name} has been cancelled",
+            "The organizer has cancelled this event. Any payment will be fully refunded.",
+            event_id=event_id, notif_type='event_cancelled'
+        )
+        try:
+            send_ticket_email(
+                to_email=reg.get('attendee_email'),
+                subject=f"{event_name} has been cancelled",
+                html_content=f"""
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+                        <h2 style="color:#dc3545;">Event Cancelled</h2>
+                        <p>Hi {reg.get('attendee_name', 'Attendee')},</p>
+                        <p><strong>{event_name}</strong> has been cancelled by the organizer.</p>
+                        {"<p>A full refund of ₹" + str(refund_amount) + " is being processed to your original payment method.</p>" if refund_amount > 0 else ""}
+                        <p>We're sorry for the inconvenience.</p>
+                    </div>
+                """
+            )
+        except Exception as e:
+            print(f"[ERROR] Cancellation email failed: {e}")
+
+def notify_new_event_published(organizer_uid, event_id, event_name):
+    """In-app notification to anyone who has previously attended (confirmed/
+    checked-in) an event by this same organizer, when they publish a new one."""
+    organizer_event_docs = (
+        db.collection('events')
+        .where('organizer_uid', '==', organizer_uid)
+        .stream()
+    )
+    past_event_ids = [d.id for d in organizer_event_docs if d.id != event_id]
+    if not past_event_ids:
+        return
+
+    notified_uids = set()
+    # Firestore 'in' queries cap at 30 values — chunk if this organizer has more events
+    for i in range(0, len(past_event_ids), 30):
+        chunk = past_event_ids[i:i + 30]
+        reg_docs = (
+            db.collection('registrations')
+            .where('event_id', 'in', chunk)
+            .where('status', 'in', ['confirmed', 'checked_in'])
+            .stream()
+        )
+        for r in reg_docs:
+            uid = r.to_dict().get('attendee_uid')
+            if uid and uid not in notified_uids:
+                notified_uids.add(uid)
+                create_notification(
+                    uid, 'New event from an organizer you know!',
+                    f"{event_name} was just published — check it out.",
+                    event_id=event_id, notif_type='new_event'
+                )
  
  
 # ── Helper: get event + verify ownership ─────────────────────────────
@@ -91,10 +240,18 @@ def create_event():
             'total_registrations': 0,
             'total_revenue':        0,
             'total_checkins':       0,
+            'refund_policy': {
+                'full_refund_days':      int(form_data.get('full_refund_days', 7)),
+                'partial_refund_days':   int(form_data.get('partial_refund_days', 3)),
+                'partial_refund_percent': int(form_data.get('partial_refund_percent', 50)),
+            },
             'created_at':     SERVER_TIMESTAMP,
             'published_at':   SERVER_TIMESTAMP if status=='published' else None,
         })
  
+        if status == 'published':
+            notify_new_event_published(session['uid'], ref.id, form_data['name'].strip())
+
         flash(f"Event '{form_data['name']}' {status}!",'success')
         return redirect(url_for('events.list_events'))
  
@@ -134,6 +291,17 @@ def edit_event(event_id):
         start_dt = datetime.strptime(form_data['start_datetime'],FMT)
         end_dt   = datetime.strptime(form_data['end_datetime'],FMT)
  
+        # Detect critical-field changes BEFORE writing the update (data['start_datetime']
+        # / data['end_datetime'] were already converted to FMT strings above for form
+        # pre-fill, so they're directly comparable to form_data's string values here).
+        changes = {}
+        if data.get('start_datetime') != form_data['start_datetime']:
+            changes['start_datetime'] = (data.get('start_datetime'), form_data['start_datetime'])
+        if data.get('end_datetime') != form_data['end_datetime']:
+            changes['end_datetime'] = (data.get('end_datetime'), form_data['end_datetime'])
+        if data.get('venue_id') != form_data['venue_id']:
+            changes['venue_id'] = (data.get('venue_id'), form_data['venue_id'])
+
         db.collection('events').document(event_id).update({
             'name':           form_data['name'].strip(),
             'description':    form_data['description'].strip(),
@@ -143,6 +311,11 @@ def edit_event(event_id):
             'event_type':     form_data.get('event_type','physical'),
             'updated_at':     SERVER_TIMESTAMP,
         })
+
+        if changes and data.get('total_registrations', 0) > 0:
+            notify_event_change(event_id, form_data['name'].strip(), changes)
+            flash(f"Event updated — {len(changes)} registered attendee(s) notified of the change.", 'info')
+
         flash(f"Event '{form_data['name']}' updated!",'success')
         return redirect(url_for('events.list_events'))
  
@@ -165,6 +338,9 @@ def publish_event(event_id):
         'status':       'published',
         'published_at': SERVER_TIMESTAMP
     })
+
+    notify_new_event_published(session['uid'], event_id, data['name'])
+
     flash(f"Event '{data['name']}' is now published!",'success')
     return redirect(url_for('events.list_events'))
  
@@ -183,8 +359,34 @@ def delete_event(event_id):
     db.collection('events').document(event_id).update({
         'status': 'cancelled'
     })
-    flash(f"Event '{data['name']}' has been cancelled.",'info')
+
+    notify_event_cancelled_and_refund(event_id, data['name'])
+
+    flash(f"Event '{data['name']}' has been cancelled. Registered attendees have been notified and refunded.", 'info')
     return redirect(url_for('events.list_events'))
+
+@events_bp.route('/<event_id>/mark-completed', methods=['POST'])
+@login_required
+@role_required('organizer')
+def mark_event_completed(event_id):
+    """Lets an organizer explicitly close out an event before its scheduled
+    end_datetime has passed (e.g. ending a multi-day event early)."""
+    doc, data = get_event_or_403(event_id)
+    if doc is None:
+        flash('Event not found or access denied.', 'danger')
+        return redirect(url_for('events.list_events'))
+
+    if data.get('status') == 'cancelled':
+        flash('A cancelled event cannot be marked as completed.', 'warning')
+        return redirect(url_for('events.event_attendees', event_id=event_id))
+
+    db.collection('events').document(event_id).update({
+        'status':        'completed',
+        'completed_at':  SERVER_TIMESTAMP,
+    })
+
+    flash(f"'{data['name']}' has been marked as completed. Certificates can now be generated.", 'success')
+    return redirect(url_for('events.event_attendees', event_id=event_id))
 # ── ATTENDEE LIST ───────────────────────────────────────────────────────
 @events_bp.route('/<event_id>/attendees')
 @login_required
@@ -203,8 +405,9 @@ def event_attendees(event_id):
     # Sort attendees by name in Python (avoids needing a complex Firestore index)
     attendees.sort(key=lambda x: x.get('attendee_name', '').lower())
 
-    # FIXED: Added 'return' and changed 'event=event' to 'event=data'
-    return render_template('organizer/events/attendees.html', event=data, attendees=attendees, event_id=event_id)
+    return render_template('organizer/events/attendees.html',
+                            event=data, attendees=attendees, event_id=event_id,
+                            event_is_over=is_event_over(data))
 
 # ── EXPORT CSV ──────────────────────────────────────────────────────────
 @events_bp.route('/<event_id>/export')
@@ -365,90 +568,278 @@ def event_analytics(event_id):
 
 @events_bp.route('/<event_id>/certificate/<reg_id>')
 @login_required
-def generate_certificate(event_id, reg_id):
-    """Generate a PDF Attendance Certificate for a checked-in user."""
-    # 1. Fetch Event and Registration data
+def _build_certificate_pdf(attendee_name, event_name, date_str, template):
+    """Pure PDF-drawing logic — takes plain values so it can be reused for both
+    real certificates and the organizer's sample preview."""
+    body_text = template.get('body_text') or DEFAULT_CERT_BODY
+    body_text = (body_text
+                 .replace('{{attendee_name}}', attendee_name)
+                 .replace('{{event_name}}', event_name)
+                 .replace('{{event_date}}', date_str))
+
+    signatures = template.get('signatures', [])
+
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=landscape(letter))
+    width, height = landscape(letter)
+
+    p.setStrokeColor(colors.HexColor('#0d6efd'))
+    p.setLineWidth(10)
+    p.rect(20, 20, width - 40, height - 40)
+
+    if template.get('logo_url'):
+        try:
+            img_data = requests.get(template['logo_url'], timeout=5).content
+            logo_img = ImageReader(BytesIO(img_data))
+            p.drawImage(logo_img, width / 2 - 40, height - 95, width=80, height=80,
+                        mask='auto', preserveAspectRatio=True)
+        except Exception as e:
+            print(f"[WARN] Could not load certificate logo: {e}")
+
+    p.setFont("Helvetica-Bold", 36)
+    p.setFillColor(colors.HexColor('#333333'))
+    p.drawCentredString(width / 2, height - 150, "CERTIFICATE OF ATTENDANCE")
+
+    p.setFont("Helvetica-Bold", 30)
+    p.setFillColor(colors.black)
+    p.drawCentredString(width / 2, height - 210, attendee_name.upper())
+
+    p.setFont("Helvetica", 15)
+    p.setFillColor(colors.HexColor('#444444'))
+    wrapped_lines = textwrap.wrap(body_text, width=85)
+    text_y = height - 260
+    for line in wrapped_lines:
+        p.drawCentredString(width / 2, text_y, line)
+        text_y -= 22
+
+    p.setFont("Helvetica", 12)
+    p.setFillColor(colors.gray)
+    p.drawString(80, 70, f"Date: {date_str}")
+
+    if signatures:
+        n = len(signatures)
+        block_width = 160
+        total_width = n * block_width
+        start_x = (width - total_width) / 2
+        sig_y = 55
+
+        for i, sig in enumerate(signatures):
+            cx = start_x + i * block_width + block_width / 2
+
+            if sig.get('signature_url'):
+                try:
+                    img_data = requests.get(sig['signature_url'], timeout=5).content
+                    sig_img = ImageReader(BytesIO(img_data))
+                    p.drawImage(sig_img, cx - 60, sig_y + 25, width=120, height=40,
+                                mask='auto', preserveAspectRatio=True)
+                except Exception as e:
+                    print(f"[WARN] Could not load signature image {i}: {e}")
+
+            p.setLineWidth(1)
+            p.setStrokeColor(colors.gray)
+            p.line(cx - 60, sig_y + 22, cx + 60, sig_y + 22)
+
+            if sig.get('signer_name'):
+                p.setFont("Helvetica-Bold", 10)
+                p.setFillColor(colors.black)
+                p.drawCentredString(cx, sig_y + 8, sig['signer_name'])
+            if sig.get('signer_title'):
+                p.setFont("Helvetica", 8)
+                p.setFillColor(colors.gray)
+                p.drawCentredString(cx, sig_y - 4, sig['signer_title'])
+
+    p.showPage()
+    p.save()
+    pdf_out = buffer.getvalue()
+    buffer.close()
+    return pdf_out
+
+
+def _generate_certificate_pdf(event_id, reg_id):
+    """Fetches event/registration/template data and builds the certificate PDF.
+    Returns (pdf_bytes, reg_data, event_data, error)."""
     event_doc = db.collection('events').document(event_id).get()
     reg_doc = db.collection('registrations').document(reg_id).get()
 
     if not event_doc.exists or not reg_doc.exists:
-        flash('Data not found.', 'danger')
-        return redirect(url_for('events.list_events'))
+        return None, None, None, 'Data not found.'
 
     event_data = event_doc.to_dict()
     reg_data = reg_doc.to_dict()
 
-    # 2. Security Check: Only allow if they actually checked in!
     if reg_data.get('status') != 'checked_in':
-        flash('Certificates are only available for attendees who checked in.', 'warning')
-        return redirect(url_for('events.list_events'))
+        return None, None, None, 'Certificates are only available for attendees who checked in.'
 
-    # 3. Security Check: Only the Attendee or the Organizer can download it
-    is_organizer = session.get('uid') == event_data.get('organizer_uid')
-    is_attendee = session.get('uid') == reg_data.get('user_uid')
-    if not is_organizer and not is_attendee:
-        flash('Unauthorized.', 'danger')
-        return redirect(url_for('events.list_events'))
+    template_doc = (db.collection('events').document(event_id)
+                     .collection('certificate_template').document('settings').get())
+    template = template_doc.to_dict() if template_doc.exists else {}
 
-    # 4. Generate the PDF
-    buffer = BytesIO()
-    # Create a landscape (horizontal) PDF
-    p = canvas.Canvas(buffer, pagesize=landscape(letter))
-    width, height = landscape(letter)
+    date_str = reg_data['created_at'].strftime('%B %d, %Y') if reg_data.get('created_at') else "2026"
+    attendee_name = reg_data.get('attendee_name', 'Unknown Attendee')
+    event_name = event_data.get('name', 'Unknown Event')
 
-    # Draw a fancy border
-    p.setStrokeColor(colors.HexColor('#0d6efd')) # Bootstrap primary blue
-    p.setLineWidth(10)
-    p.rect(20, 20, width-40, height-40)
+    pdf_out = _build_certificate_pdf(attendee_name, event_name, date_str, template)
+    return pdf_out, reg_data, event_data, None
 
-    # Title
-    p.setFont("Helvetica-Bold", 40)
-    p.setFillColor(colors.HexColor('#333333'))
-    p.drawCentredString(width/2, height - 120, "CERTIFICATE OF ATTENDANCE")
 
-    # Subtitle
-    p.setFont("Helvetica", 20)
-    p.setFillColor(colors.gray)
-    p.drawCentredString(width/2, height - 180, "This is to certify that")
+@events_bp.route('/<event_id>/certificate/settings/preview')
 
-    # Attendee Name
-    p.setFont("Helvetica-Bold", 35)
-    p.setFillColor(colors.black)
-    p.drawCentredString(width/2, height - 240, reg_data.get('attendee_name', 'Unknown Attendee').upper())
 
-    # Event info
-    p.setFont("Helvetica", 20)
-    p.setFillColor(colors.gray)
-    p.drawCentredString(width/2, height - 300, "has successfully attended the event")
+@events_bp.route('/<event_id>/certificate/settings/preview')
+@login_required
+@role_required('organizer')
+def certificate_settings_preview(event_id):
+    """Lets the organizer preview a SAMPLE certificate with their current template
+    settings, before running the real bulk generation."""
+    doc, data = get_event_or_403(event_id)
+    if doc is None:
+        abort(403)
 
-    # Event Name
-    p.setFont("Helvetica-Bold", 25)
-    p.setFillColor(colors.HexColor('#0d6efd'))
-    p.drawCentredString(width/2, height - 350, event_data.get('name', 'Unknown Event'))
+    template_doc = (db.collection('events').document(event_id)
+                     .collection('certificate_template').document('settings').get())
+    template = template_doc.to_dict() if template_doc.exists else {}
 
-    # Date
-    p.setFont("Helvetica", 14)
-    p.setFillColor(colors.gray)
-    if reg_data.get('created_at'):
-        date_str = reg_data['created_at'].strftime('%B %d, %Y')
-    else:
-        date_str = "2026"
-    p.drawCentredString(width/2, 100, f"Date: {date_str}")
+    pdf_bytes = _build_certificate_pdf(
+        attendee_name='Jane Doe (Sample)',
+        event_name=data.get('name', 'Sample Event'),
+        date_str=datetime.now().strftime('%B %d, %Y'),
+        template=template,
+    )
 
-    # Finish saving the PDF
-    p.showPage()
-    p.save()
-
-    # 5. Send PDF to browser
-    pdf_out = buffer.getvalue()
-    buffer.close()
-    
-    response = make_response(pdf_out)
+    response = make_response(pdf_bytes)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'attachment; filename=Certificate_{reg_data.get("attendee_name", "Attendee")}.pdf'
-    
+    response.headers['Content-Disposition'] = 'inline; filename=certificate_sample.pdf'
     return response
 
+
+@events_bp.route('/<event_id>/certificates/generate-all', methods=['POST'])
+@login_required
+@role_required('organizer')
+def generate_certificates_bulk(event_id):
+    """Generates + stores a certificate for every checked-in attendee of this
+    event, and notifies each one in-app that it's ready to download."""
+    doc, data = get_event_or_403(event_id)
+    if doc is None:
+        flash('Event not found or access denied.', 'danger')
+        return redirect(url_for('events.list_events'))
+
+    if not is_event_over(data):
+        flash('Certificates can only be generated after the event has ended.', 'warning')
+        return redirect(url_for('events.event_attendees', event_id=event_id))
+
+    regs = (db.collection('registrations')
+            .where('event_id', '==', event_id)
+            .where('status', '==', 'checked_in').stream())
+
+    generated = 0
+    failed = 0
+
+    for r in regs:
+        reg_id = r.id
+        pdf_bytes, reg_data, event_data, error = _generate_certificate_pdf(event_id, reg_id)
+        if error:
+            failed += 1
+            continue
+
+        try:
+            upload_result = cloudinary.uploader.upload(
+                BytesIO(pdf_bytes),
+                folder='ems_certificates_generated',
+                public_id=f'cert_{event_id}_{reg_id}',
+                resource_type='raw',
+                format='pdf',
+                overwrite=True
+            )
+            certificate_url = upload_result.get('secure_url')
+        except Exception as e:
+            print(f"[ERROR] Certificate upload failed for {reg_id}: {e}")
+            failed += 1
+            continue
+
+        db.collection('registrations').document(reg_id).update({
+            'certificate_url':         certificate_url,
+            'certificate_generated_at': SERVER_TIMESTAMP,
+        })
+
+        create_notification(
+            reg_data['attendee_uid'], 'Your certificate is ready!',
+            f"Your certificate for {event_data.get('name', 'the event')} is ready to download from My Certificates.",
+            event_id=event_id, notif_type='certificate_ready'
+        )
+        generated += 1
+
+    msg = f'Certificates generated for {generated} attendee(s).'
+    if failed:
+        msg += f' {failed} could not be generated.'
+    flash(msg, 'success' if generated else 'warning')
+    return redirect(url_for('events.event_attendees', event_id=event_id))
+
+@events_bp.route('/<event_id>/certificate/settings', methods=['GET', 'POST'])
+@login_required
+@role_required('organizer')
+def certificate_settings(event_id):
+    doc, data = get_event_or_403(event_id)
+    if doc is None:
+        flash('Event not found or access denied.', 'danger')
+        return redirect(url_for('events.list_events'))
+
+    settings_ref = (db.collection('events').document(event_id)
+                     .collection('certificate_template').document('settings'))
+    settings_doc = settings_ref.get()
+    settings = settings_doc.to_dict() if settings_doc.exists else {}
+
+    if request.method == 'POST':
+        update_data = {
+            'body_text':  request.form.get('body_text', '').strip() or DEFAULT_CERT_BODY,
+            'updated_at': SERVER_TIMESTAMP,
+        }
+
+        logo_file = request.files.get('logo_file')
+        if logo_file and logo_file.filename:
+            upload = cloudinary.uploader.upload(
+                logo_file, folder='ems_certificates',
+                public_id=f'logo_{event_id}', overwrite=True
+            )
+            update_data['logo_url'] = upload.get('secure_url')
+        elif settings.get('logo_url'):
+            update_data['logo_url'] = settings['logo_url']  # keep old logo if no new one uploaded
+
+        # ── Rebuild the signatures array from however many blocks were submitted ──
+        signatures = []
+        index = 0
+        while f'signer_name_{index}' in request.form:
+            signer_name  = request.form.get(f'signer_name_{index}', '').strip()
+            signer_title = request.form.get(f'signer_title_{index}', '').strip()
+            existing_url = request.form.get(f'existing_signature_url_{index}', '')
+            sig_file     = request.files.get(f'signature_file_{index}')
+
+            signature_url = existing_url
+            if sig_file and sig_file.filename:
+                upload = cloudinary.uploader.upload(
+                    sig_file, folder='ems_certificates',
+                    public_id=f'signature_{event_id}_{index}_{secrets.token_hex(3)}',
+                    overwrite=True
+                )
+                signature_url = upload.get('secure_url')
+
+            if signer_name or signature_url:
+                signatures.append({
+                    'signer_name':   signer_name,
+                    'signer_title':  signer_title,
+                    'signature_url': signature_url,
+                })
+            index += 1
+
+        update_data['signatures'] = signatures
+
+        # Full overwrite (not merge) so a removed signature block actually disappears
+        settings_ref.set(update_data, merge=False)
+        flash('Certificate template updated!', 'success')
+        return redirect(url_for('events.certificate_settings', event_id=event_id))
+
+    return render_template('organizer/events/certificate_settings.html',
+                            event=data, event_id=event_id, settings=settings,
+                            default_body=DEFAULT_CERT_BODY)
 
 
 @events_bp.route('/<event_id>/feedback')

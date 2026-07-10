@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, session
+from flask import Blueprint, render_template, session, request, flash, redirect, url_for
 from app.firebase_config import db
 from app.decorators import login_required, role_required
-from datetime import datetime, timezone  # <--- Added this to handle dates properly!
+from datetime import datetime, timezone
+from google.cloud.firestore import SERVER_TIMESTAMP
 
 organizer_bp = Blueprint('organizer', __name__, url_prefix='/organizer')
 
@@ -52,3 +53,31 @@ def dashboard():
         total_checkins=total_checkins,
         recent_regs=recent_regs
     )
+
+
+@organizer_bp.route('/platform-feedback', methods=['GET', 'POST'])
+@login_required
+@role_required('organizer')
+def platform_feedback():
+    """Lets an organizer rate/comment on the EMS platform itself (not a
+    specific event). Visible to Super Admin only — this is product feedback,
+    not an event review."""
+    uid = session.get('uid')
+
+    if request.method == 'POST':
+        rating = int(request.form.get('rating', 5))
+        comments = request.form.get('comments', '').strip()
+
+        db.collection('platform_feedback').add({
+            'organizer_uid':  uid,
+            'organizer_name': session.get('name', ''),
+            'organizer_email': session.get('email', ''),
+            'rating':         rating,
+            'comments':       comments,
+            'created_at':     SERVER_TIMESTAMP,
+        })
+
+        flash('Thank you for your feedback! It helps us improve EMS.', 'success')
+        return redirect(url_for('organizer.dashboard'))
+
+    return render_template('organizer/platform_feedback.html')

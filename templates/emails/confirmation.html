@@ -3,33 +3,43 @@
 <body style="font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px; margin: 0;">
     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e0e0e0;">
         <h2 style="color: #0d6efd; margin-top: 0;">Your Ticket Confirmation</h2>
-        <p>Hi {{ registration.attendee_name }},</p>
+        <p>Hi {{ order.attendee_name }},</p>
         <p>Thank you for registering for <strong>{{ event.name }}</strong>!</p>
-        
+
         <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #0d6efd;">
-            <p style="margin: 5px 0;"><strong>Ticket Type:</strong> {{ registration.ticket_type_name }}</p>
-            <p style="margin: 5px 0;"><strong>Quantity:</strong> {{ registration.quantity }}</p>
-            <p style="margin: 5px 0;"><strong>Order Number:</strong> {{ registration_id }}</p>
+            <p style="margin: 5px 0;"><strong>Order Number:</strong> {{ order.order_number }}</p>
+            <p style="margin: 5px 0;"><strong>Total Paid:</strong> ₹{{ order.total_amount }}</p>
         </div>
-        
-                   <div style="text-align: center; margin: 30px 0;">
-            <p style="font-size: 14px; color: #6c757d;">Present this QR Code at the venue for check-in:</p>
-            
-            <!-- Simplified Image Tag for better Gmail Mobile Support -->
-            <img src="{{ qr_url }}" alt="Your Ticket QR Code" width="200" height="200" style="display: block; margin: 0 auto; max-width: 100%;">
-            
-            <!-- Foolproof Fallback Link -->
-            <div style="margin-top: 20px;">
-                <a href="{{ qr_url }}" target="_blank" style="background-color: #0d6efd; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; display: inline-block;">
-                    View QR Code in Browser
-                </a>
+
+        {% for reg in registrations %}
+        <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #0d6efd;">
+                <p style="margin: 5px 0;"><strong>Ticket Type:</strong> {{ reg.ticket_type_name }}</p>
+                <p style="margin: 5px 0;"><strong>Quantity:</strong> {{ reg.quantity }}</p>
+                <p style="margin: 5px 0;"><strong>Amount:</strong> ₹{{ reg.total_amount }}</p>
             </div>
-            
-            <!-- Direct URL Print (Just to debug what Gmail is receiving) -->
-            <p style="font-size: 10px; color: #adb5bd; margin-top: 15px; word-break: break-all;">
-                {{ qr_url }}
-            </p>
+
+            <div style="text-align: center; margin: 20px 0;">
+                <p style="font-size: 14px; color: #6c757d;">Present this QR Code at the venue for check-in:</p>
+
+                <!-- Simplified Image Tag for better Gmail Mobile Support -->
+                <img src="{{ reg.qr_code_url }}" alt="Your Ticket QR Code" width="200" height="200" style="display: block; margin: 0 auto; max-width: 100%;">
+
+                <!-- Foolproof Fallback Link -->
+                <div style="margin-top: 20px;">
+                    <a href="{{ reg.qr_code_url }}" target="_blank" style="background-color: #0d6efd; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; display: inline-block;">
+                        View QR Code in Browser
+                    </a>
+                </div>
+
+                <!-- Direct URL Print (Just to debug what Gmail is receiving) -->
+                <p style="font-size: 10px; color: #adb5bd; margin-top: 15px; word-break: break-all;">
+                    {{ reg.qr_code_url }}
+                </p>
+            </div>
         </div>
+        {% endfor %}
+
         <p style="font-size: 14px; color: #6c757d;">We look forward to seeing you!</p>
     </div>
 </body>
