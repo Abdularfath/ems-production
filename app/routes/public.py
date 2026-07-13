@@ -141,6 +141,12 @@ def event_detail(event_id):
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
     review_count = len(ratings)
 
+    refund_policy = event.get('refund_policy', {
+        'full_refund_days': 7,
+        'partial_refund_days': 3,
+        'partial_refund_percent': 50,
+    })
+
     return render_template('public/event_detail.html',
                            event=event,
                            venue=venue,
@@ -151,7 +157,8 @@ def event_detail(event_id):
                            exhibitors=exhibitors,
                            event_is_over=event_is_over,
                            avg_rating=avg_rating,
-                           review_count=review_count)
+                           review_count=review_count,
+                           refund_policy=refund_policy)
 @public_bp.route('/api/events/<event_id>/validate_promo/<code>', methods=['GET'])
 def validate_promo(event_id, code):
     """API Endpoint to validate a promo code via AJAX."""

@@ -512,6 +512,9 @@ def cancel_registration(reg_id):
         flash(f'Registration cancelled. Refund of ₹{refund_amount} ({refund_pct}%) will be processed.', 'success')
         return redirect(url_for('attendee.my_events'))
 
+    policy = event.get('refund_policy', DEFAULT_REFUND_POLICY)
+
     return render_template('attendee/cancel_confirm.html',
                             registration=reg, event=event,
-                            refund_amount=refund_amount, refund_percent=refund_pct)
+                            refund_amount=refund_amount, refund_percent=refund_pct,
+                            policy=policy)

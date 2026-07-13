@@ -2,7 +2,7 @@ from flask import (Blueprint, render_template, request,
                    redirect, url_for, flash, session)
 from app.firebase_config import db
 from app.decorators import login_required, role_required
-from google.cloud.firestore import SERVER_TIMESTAMP
+from google.cloud.firestore import SERVER_TIMESTAMP, Query
 
 super_admin_bp = Blueprint('super_admin', __name__, url_prefix='/superadmin')
 
@@ -360,3 +360,27 @@ def assign_tenant(uid):
     user_ref.update({'tenant_id': tenant_id})
     flash('Organizer assigned to tenant successfully!', 'success')
     return redirect(url_for('super_admin.all_organizers'))
+
+
+# ── ORGANIZER PLATFORM FEEDBACK ──────────────────────────────────────
+@super_admin_bp.route('/platform-feedback')
+@login_required
+@role_required('super_admin')
+def view_platform_feedback():
+    docs = db.collection('platform_feedback').order_by(
+        'created_at', direction=Query.DESCENDING
+    ).stream()
+
+    feedback_list = [{**d.to_dict(), 'id': d.id} for d in docs]
+
+    avg_rating = (
+        round(sum(f.get('rating', 0) for f in feedback_list) / len(feedback_list), 1)
+        if feedback_list else 0
+    )
+
+    return render_template(
+        'super_admin/platform_feedback.html',
+        feedback_list=feedback_list,
+        avg_rating=avg_rating,
+        total_feedback=len(feedback_list)
+    )

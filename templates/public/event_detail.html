@@ -345,9 +345,19 @@
       </div>
       {% endfor %}
 
-      <!-- Promo code input -->
-      <hr class="my-3">
-      <label class="form-label small fw-semibold">Have a promo code?</label>
+      {# Refund policy — shown before purchase for transparency #}
+        <div class="alert alert-light border small mb-3">
+          <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Cancellation Policy</div>
+          <ul class="mb-0 ps-3">
+            <li>Cancel {{ refund_policy.full_refund_days }}+ days before the event: <strong>100% refund</strong></li>
+            <li>Cancel {{ refund_policy.partial_refund_days }}–{{ refund_policy.full_refund_days - 1 }} days before: <strong>{{ refund_policy.partial_refund_percent }}% refund</strong></li>
+            <li>Cancel less than {{ refund_policy.partial_refund_days }} days before: <strong>No refund</strong></li>
+          </ul>
+        </div>
+
+        {# Promo code input #}
+        <hr class="my-3">
+        <label class="form-label small fw-semibold">Have a promo code?</label>
       <div class="input-group input-group-sm mb-1">
         <input type="text" id="promoInput" name="promo_code"
                class="form-control text-uppercase" placeholder="Enter code">

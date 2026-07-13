@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Platform Feedback{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h3 class="fw-bold mb-4"><i class="bi bi-chat-square-heart me-2 text-primary"></i>Organizer Platform Feedback</h3>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm p-3 text-center">
+        <div class="fs-3 fw-bold text-warning">{{ avg_rating }} <i class="bi bi-star-fill"></i></div>
+        <div class="text-muted small">Average Rating</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm p-3 text-center">
+        <div class="fs-3 fw-bold text-primary">{{ total_feedback }}</div>
+        <div class="text-muted small">Total Responses</div>
+      </div>
+    </div>
+  </div>
+
+  {% if not feedback_list %}
+  <div class="card text-center py-5 border-0 shadow-sm">
+    <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+    <h5 class="text-muted">No feedback submitted yet</h5>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="px-3">Organizer</th>
+            <th>Rating</th>
+            <th>Comments</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in feedback_list %}
+          <tr>
+            <td class="px-3">
+              <div class="fw-semibold">{{ f.organizer_name or 'Unknown' }}</div>
+              <div class="text-muted small">{{ f.organizer_email }}</div>
+            </td>
+            <td>
+              <span class="text-warning">
+                {% for i in range(f.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                {% for i in range(5 - f.rating) %}<i class="bi bi-star"></i>{% endfor %}
+              </span>
+            </td>
+            <td class="small">{{ f.comments or '—' }}</td>
+            <td class="text-muted small">
+              {% if f.created_at %}{{ f.created_at.strftime('%b %d, %Y') }}{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

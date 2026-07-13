@@ -18,6 +18,26 @@
       {% endif %}
     </div>
 
+    <div class="card border-0 bg-light p-3 mb-3">
+      <div class="fw-semibold small mb-2"><i class="bi bi-list-check me-1"></i>Full Refund Policy</div>
+      <table class="table table-sm mb-0 small">
+        <tbody>
+          <tr class="{{ 'table-success' if refund_percent == 100 else '' }}">
+            <td>{{ policy.full_refund_days }}+ days before event</td>
+            <td class="text-end fw-semibold">100% refund</td>
+          </tr>
+          <tr class="{{ 'table-warning' if 0 < refund_percent < 100 else '' }}">
+            <td>{{ policy.partial_refund_days }}–{{ policy.full_refund_days - 1 }} days before event</td>
+            <td class="text-end fw-semibold">{{ policy.partial_refund_percent }}% refund</td>
+          </tr>
+          <tr class="{{ 'table-danger' if refund_percent == 0 else '' }}">
+            <td>Less than {{ policy.partial_refund_days }} days before event</td>
+            <td class="text-end fw-semibold">No refund</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <button type="submit" class="btn btn-danger w-100">
