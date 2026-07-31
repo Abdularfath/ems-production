@@ -30,9 +30,9 @@
  
         {# Wireframe page 7: Save Draft + Publish buttons at top right #}
         {% if action == 'edit' %}
-          <form method="POST" action="{{ url_for('events.edit_event', event_id=event_id) }}" novalidate>
+          <form method="POST" action="{{ url_for('events.edit_event', event_id=event_id) }}" enctype="multipart/form-data" novalidate>
         {% else %}
-          <form method="POST" action="{{ url_for('events.create_event') }}" novalidate>
+          <form method="POST" action="{{ url_for('events.create_event') }}" enctype="multipart/form-data" novalidate>
         {% endif %}
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
  
@@ -49,6 +49,20 @@
             <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
             <textarea name="description" class="form-control" rows="4"
                       placeholder="Describe your event...">{{ form_data.get('description','') }}</textarea>
+          </div>
+
+          {# Cover Image #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Cover Image</label>
+            {% if action == 'edit' and form_data.get('cover_image_url') %}
+            <div class="mb-2">
+              <img src="{{ form_data.get('cover_image_url') }}" alt="Current cover image"
+                   class="rounded" style="max-height:140px; max-width:100%; object-fit:cover;">
+              <div class="form-text">Current cover image — upload a new one below to replace it.</div>
+            </div>
+            {% endif %}
+            <input type="file" name="cover_image" accept="image/*" class="form-control">
+            <div class="form-text">Recommended: a wide landscape image (shown on the event listing and detail page).</div>
           </div>
  
           {# Start and End dates #}

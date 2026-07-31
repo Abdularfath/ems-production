@@ -15,6 +15,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib import colors
 from google.cloud.firestore import Query
+import cloudinary.uploader
 import requests
 import secrets
 import cloudinary.uploader
@@ -212,6 +213,9 @@ def list_events():
 @login_required
 @role_required('organizer')
 def create_event():
+    # NOTE: request.form.to_dict() below only reads text fields — the file
+    # itself (request.files) is read separately in Part A2 above. No change
+    # needed to how form_data is built.
     venues = get_my_venues()
  
     if request.method == 'POST':
@@ -227,7 +231,21 @@ def create_event():
         status = 'published' if action == 'publish' else 'draft'
         start_dt = datetime.strptime(form_data['start_datetime'],FMT)
         end_dt   = datetime.strptime(form_data['end_datetime'],FMT)
- 
+
+        cover_image_url = None
+        cover_file = request.files.get('cover_image')
+        if cover_file and cover_file.filename:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    cover_file,
+                    folder='ems_event_covers',
+                    overwrite=True
+                )
+                cover_image_url = upload_result.get('secure_url')
+            except Exception as e:
+                print(f"[ERROR] Cover image upload failed: {e}")
+                flash('Event saved, but the cover image could not be uploaded.', 'warning')
+
         _,ref = db.collection('events').add({
             'name':           form_data['name'].strip(),
             'description':    form_data['description'].strip(),
@@ -240,6 +258,7 @@ def create_event():
             'total_registrations': 0,
             'total_revenue':        0,
             'total_checkins':       0,
+            'cover_image_url': cover_image_url,
             'refund_policy': {
                 'full_refund_days':      int(form_data.get('full_refund_days', 7)),
                 'partial_refund_days':   int(form_data.get('partial_refund_days', 3)),
@@ -290,10 +309,25 @@ def edit_event(event_id):
  
         start_dt = datetime.strptime(form_data['start_datetime'],FMT)
         end_dt   = datetime.strptime(form_data['end_datetime'],FMT)
- 
-        # Detect critical-field changes BEFORE writing the update (data['start_datetime']
-        # / data['end_datetime'] were already converted to FMT strings above for form
-        # pre-fill, so they're directly comparable to form_data's string values here).
+
+        update_payload = {}
+        cover_file = request.files.get('cover_image')
+        if cover_file and cover_file.filename:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    cover_file,
+                    folder='ems_event_covers',
+                    public_id=f'event_{event_id}',
+                    overwrite=True
+                )
+                update_payload['cover_image_url'] = upload_result.get('secure_url')
+            except Exception as e:
+                print(f"[ERROR] Cover image upload failed: {e}")
+                flash('Event updated, but the new cover image could not be uploaded.', 'warning')
+        # If no new file is chosen, the existing cover_image_url on the
+        # document is simply left untouched — .update() only overwrites
+        # fields explicitly included in this payload.
+
         changes = {}
         if data.get('start_datetime') != form_data['start_datetime']:
             changes['start_datetime'] = (data.get('start_datetime'), form_data['start_datetime'])
@@ -302,7 +336,7 @@ def edit_event(event_id):
         if data.get('venue_id') != form_data['venue_id']:
             changes['venue_id'] = (data.get('venue_id'), form_data['venue_id'])
 
-        db.collection('events').document(event_id).update({
+        update_payload.update({
             'name':           form_data['name'].strip(),
             'description':    form_data['description'].strip(),
             'start_datetime': start_dt,
@@ -311,6 +345,7 @@ def edit_event(event_id):
             'event_type':     form_data.get('event_type','physical'),
             'updated_at':     SERVER_TIMESTAMP,
         })
+        db.collection('events').document(event_id).update(update_payload)
 
         if changes and data.get('total_registrations', 0) > 0:
             notify_event_change(event_id, form_data['name'].strip(), changes)

@@ -16,7 +16,8 @@
  
       {# Cover image #}
       {% if event.cover_image_url %}
-      <img src="{{ event.cover_image_url }}" class="img-fluid rounded-3 mb-4 w-100" style="max-height:320px;object-fit:cover" alt="{{ event.name }}">
+      <img src="{{ event.cover_image_url }}" class="img-fluid rounded-3 mb-4 w-100"
+           style="max-height:320px;object-fit:contain;background-color:#f1f3f5" alt="{{ event.name }}">
       {% endif %}
  
       {# Event title and meta #}

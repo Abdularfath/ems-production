@@ -61,7 +61,8 @@
  
         {# Cover image or placeholder #}
         {% if event.cover_image_url %}
-        <img src="{{ event.cover_image_url }}" class="card-img-top ems-event-img" alt="{{ event.name }}">
+        <img src="{{ event.cover_image_url }}" class="card-img-top ems-event-img"
+             style="object-fit:contain;background-color:#f1f3f5" alt="{{ event.name }}">
         {% else %}
         <div class="ems-event-img-placeholder bg-primary bg-gradient d-flex align-items-center justify-content-center">
           <i class="bi bi-calendar-event text-white" style="font-size:3rem"></i>
