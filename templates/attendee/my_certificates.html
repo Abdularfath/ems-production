@@ -31,8 +31,9 @@
           <p class="text-muted small mb-0">Issued {{ cert.generated_at.strftime('%B %d, %Y') }}</p>
           {% endif %}
         </div>
-        <a href="{{ cert.certificate_url }}" target="_blank" class="btn btn-success">
-          <i class="bi bi-download me-1"></i>Download
+        <a href="{{ url_for('attendee.download_certificate', reg_id=cert.reg_id) }}" 
+        class="btn btn-success">
+        <i class="bi bi-download me-1"></i>Download
         </a>
       </div>
     </div>

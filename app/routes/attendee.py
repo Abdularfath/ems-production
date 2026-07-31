@@ -6,6 +6,9 @@ from app.decorators import login_required, role_required
 from datetime import datetime, timezone
 from google.cloud.firestore import SERVER_TIMESTAMP
 from app.utils.event_utils import is_event_over
+import requests as http_requests
+from flask import send_file
+from io import BytesIO
 
 # 1. Define the Blueprint (This was missing!)
 attendee_bp = Blueprint('attendee', __name__, url_prefix='/attendee')
@@ -83,6 +86,55 @@ def my_certificates():
     )
 
     return render_template('attendee/my_certificates.html', certificates=certificates)
+
+
+@attendee_bp.route('/download-certificate/<reg_id>')
+@login_required
+@role_required('attendee')
+def download_certificate(reg_id):
+    uid = session.get('uid')
+
+    reg_doc = db.collection('registrations').document(reg_id).get()
+    if not reg_doc.exists:
+        flash('Certificate not found.', 'danger')
+        return redirect(url_for('attendee.my_certificates'))
+
+    reg_data = reg_doc.to_dict()
+
+    # Security check
+    if reg_data.get('attendee_uid') != uid:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('attendee.my_certificates'))
+
+    if reg_data.get('status') != 'checked_in':
+        flash('Certificate only available for checked-in attendees.', 'warning')
+        return redirect(url_for('attendee.my_certificates'))
+
+    try:
+        # Import here to avoid circular imports
+        from app.routes.events import _generate_certificate_pdf
+
+        pdf_bytes, reg_data_out, event_data, error = _generate_certificate_pdf(
+            reg_data.get('event_id'), reg_id
+        )
+
+        if error or not pdf_bytes:
+            flash(f'Could not generate certificate: {error}', 'danger')
+            return redirect(url_for('attendee.my_certificates'))
+
+        event_name = event_data.get('name', 'event').replace(' ', '_')
+
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'Certificate_{event_name}_{reg_id[:8]}.pdf'
+        )
+
+    except Exception as e:
+        print(f"[ERROR] Certificate download failed: {e}")
+        flash('Download failed. Please try again.', 'danger')
+        return redirect(url_for('attendee.my_certificates'))
 
 
 @attendee_bp.route('/notifications')

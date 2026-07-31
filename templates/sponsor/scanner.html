@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}Lead Scanner - {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('sponsor_portal.dashboard') }}">My Sponsorships</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('sponsor_portal.event_detail', event_id=event_id) }}">{{ event.name }}</a></li>
+            <li class="breadcrumb-item active">Lead Scanner</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6 text-center">
+            <h2 class="fw-bold mb-2"><i class="bi bi-qr-code-scan text-warning me-2"></i>Booth Lead Scanner</h2>
+            <p class="text-muted mb-4">Scan an attendee's ticket QR to capture them as a lead for <strong>{{ sponsor.company_name }}</strong></p>
+
+            <div class="card shadow border-0 overflow-hidden mb-4">
+                <div class="card-body p-0">
+                    <div id="reader" width="100%"></div>
+                </div>
+            </div>
+
+            <div id="scan-result" class="alert d-none" role="alert"></div>
+
+            <a href="{{ url_for('sponsor_portal.event_detail', event_id=event_id) }}" class="btn btn-outline-secondary mt-3">Exit Scanner</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const resultDiv = document.getElementById('scan-result');
+        let isScanning = true;
+
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: {width: 250, height: 250} },
+            false
+        );
+
+        async function onScanSuccess(decodedText) {
+            if (!isScanning) return;
+            isScanning = false;
+            html5QrcodeScanner.pause();
+
+            resultDiv.className = "alert alert-secondary mt-3";
+            resultDiv.textContent = "Verifying...";
+            resultDiv.classList.remove('d-none');
+
+            try {
+                const res = await fetch("{{ url_for('sponsor_portal.scan_lead', event_id=event_id) }}", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ qr_payload: decodedText })
+                });
+                const data = await res.json();
+
+                let cls = 'alert-danger';
+                if (data.success && data.already_captured) cls = 'alert-warning';
+                else if (data.success) cls = 'alert-success';
+
+                resultDiv.className = `alert ${cls} mt-3`;
+                resultDiv.innerHTML = `${data.message}<br><br><button class="btn btn-sm btn-primary mt-2" onclick="resumeScan()">Scan Next</button>`;
+
+                if (data.success && !data.already_captured) {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.play().catch(() => {});
+                }
+            } catch (err) {
+                resultDiv.className = "alert alert-danger mt-3";
+                resultDiv.innerHTML = `Something went wrong verifying this ticket.<br><br><button class="btn btn-sm btn-primary mt-2" onclick="resumeScan()">Try Again</button>`;
+            }
+        }
+
+        function onScanFailure() {}
+
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+
+        window.resumeScan = function() {
+            resultDiv.className = "alert d-none";
+            isScanning = true;
+            html5QrcodeScanner.resume();
+        };
+    });
+</script>
+{% endblock %}

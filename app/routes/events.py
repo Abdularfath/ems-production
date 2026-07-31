@@ -747,8 +747,10 @@ def generate_certificates_bulk(event_id):
                 folder='ems_certificates_generated',
                 public_id=f'cert_{event_id}_{reg_id}',
                 resource_type='raw',
+                type='upload',
                 format='pdf',
-                overwrite=True
+                overwrite=True,
+                access_mode='public'
             )
             certificate_url = upload_result.get('secure_url')
         except Exception as e:

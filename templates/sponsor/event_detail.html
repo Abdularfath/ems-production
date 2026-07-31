@@ -114,6 +114,85 @@
         </div>
     </div>
 
+    <!-- Leads & ROI -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0">
+            <i class="bi bi-people-fill me-2 text-primary"></i>Your Leads
+        </h5>
+        <a href="{{ url_for('sponsor_portal.lead_scanner', event_id=event_id) }}" class="btn btn-warning btn-sm">
+            <i class="bi bi-qr-code-scan me-1"></i>Scan for Leads
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-4">
+                    <h4 class="fw-bold mb-0">{{ leads_count }}</h4>
+                    <small class="text-muted">Leads Captured</small>
+                </div>
+                <div class="col-4">
+                    <h4 class="fw-bold text-success mb-0">₹{{ "{:,.0f}".format(sponsor.amount) }}</h4>
+                    <small class="text-muted">Sponsorship Paid</small>
+                </div>
+                <div class="col-4">
+                    <h4 class="fw-bold text-primary mb-0">
+                        {% if cost_per_lead %}₹{{ cost_per_lead }}{% else %}—{% endif %}
+                    </h4>
+                    <small class="text-muted">Avg. Cost per Lead (so far)</small>
+                </div>
+            </div>
+            <div class="text-center mt-3 pt-3 border-top">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    This is an engagement-based ROI indicator — total sponsorship divided by leads
+                    captured so far. It updates automatically as more leads come in during the event,
+                    and doesn't include post-event sales you close independently with these contacts.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    {% if leads %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="px-3">Attendee</th>
+                        <th>Email</th>
+                        <th>Source</th>
+                        <th>Captured</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in leads %}
+                    <tr>
+                        <td class="px-3 fw-semibold">{{ lead.attendee_name }}</td>
+                        <td class="text-muted small">{{ lead.attendee_email }}</td>
+                        <td>
+                            {% if lead.source == 'qr_scan' %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-qr-code-scan me-1"></i>QR Scan</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Self-connect</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">
+                            {% if lead.connected_at %}{{ lead.connected_at.strftime('%b %d, %Y %I:%M %p') }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-4 mb-4">
+        <i class="bi bi-people fs-1 text-muted"></i>
+        <p class="text-muted mt-2">No leads captured yet — scan attendee tickets at your booth, or wait for attendees to click Connect on the event page.</p>
+    </div>
+    {% endif %}
+
     <!-- Deliverables List -->
     <h5 class="fw-bold mb-3">
         <i class="bi bi-list-check me-2"></i>Deliverables
